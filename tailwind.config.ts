@@ -57,6 +57,11 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        warranty: {
+          valid: "hsl(var(--warranty-valid))",
+          warning: "hsl(var(--warranty-warning))",
+          expired: "hsl(var(--warranty-expired))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
