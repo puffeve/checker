@@ -1,9 +1,12 @@
 import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Header } from "@/components/Header";
 import { WarrantyBadge } from "@/components/WarrantyBadge";
 import { StatusBadge } from "@/components/StatusBadge";
+import { AdminLogin } from "@/components/AdminLogin";
+import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { mockComputers, departments } from "@/data/mockComputers";
 import { enrichComputerWithWarranty } from "@/utils/warrantyUtils";
 import {
@@ -31,9 +34,11 @@ import {
   XCircle,
   Search,
   Filter,
+  LogOut,
 } from "lucide-react";
 
 export default function AdminPage() {
+  const { isAuthenticated, login, logout } = useAdminAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("ทั้งหมด");
   const [warrantyFilter, setWarrantyFilter] = useState("all");
@@ -85,14 +90,25 @@ export default function AdminPage() {
     return { total, active, repair, retired, nearExpiry, expired };
   }, [computersWithWarranty]);
 
+  // Show login screen if not authenticated
+  if (!isAuthenticated) {
+    return <AdminLogin onLogin={login} />;
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
 
       <main className="container mx-auto px-4 py-8">
-        <h2 className="text-2xl font-bold text-foreground mb-6">
-          แดชบอร์ดผู้ดูแลระบบ
-        </h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-foreground">
+            แดชบอร์ดผู้ดูแลระบบ
+          </h2>
+          <Button variant="outline" size="sm" onClick={logout} className="gap-2">
+            <LogOut className="h-4 w-4" />
+            ออกจากระบบ
+          </Button>
+        </div>
 
         {/* Dashboard Stats */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
