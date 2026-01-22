@@ -94,7 +94,7 @@ export function AdminLogin({ onLogin }: AdminLoginProps) {
           </form>
 
           <p className="text-center text-xs text-muted-foreground mt-6">
-            ระบบตรวจสอบซีเรียลนัมเบอร์ | Greenwing & Angelway Group
+            ระบบตรวจสอบซีเรียลนัมเบอร์ | บริษัท ออโต้ พรีเมียม จำกัด
           </p>
         </CardContent>
       </Card>

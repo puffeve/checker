@@ -1,46 +1,42 @@
-import { useState, useMemo, useCallback } from "react";
-import { Header } from "@/components/Header";
-import { ComputerCard } from "@/components/ComputerCard";
+import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useComputers } from "@/hooks/useComputers";
-import { Search, Monitor, Loader2 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Header } from "@/components/Header";
+import { ComputerCard } from "@/components/ComputerCard";
+import { mockComputers } from "@/data/mockComputers";
+import { enrichComputerWithWarranty } from "@/utils/warrantyUtils";
+import { Search, Monitor } from "lucide-react";
 
 export default function SearchPage() {
-  const { computers, loading } = useComputers();
-  const [query, setQuery] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [hasSearched, setHasSearched] = useState(false);
+
+  const computersWithWarranty = useMemo(
+    () => mockComputers.map(enrichComputerWithWarranty),
+    []
+  );
 
   const searchResults = useMemo(() => {
-    if (!searchTerm.trim()) return [];
-
-    const normalizedSearch = searchTerm.toLowerCase().trim();
-    return computers.filter(
+    if (!searchQuery.trim()) return [];
+    
+    const query = searchQuery.toLowerCase().trim();
+    return computersWithWarranty.filter(
       (computer) =>
-        computer.name.toLowerCase().includes(normalizedSearch) ||
-        computer.serialNumber.toLowerCase().includes(normalizedSearch)
+        computer.name.toLowerCase().includes(query) ||
+        computer.serialNumber.toLowerCase().includes(query)
     );
-  }, [computers, searchTerm]);
+  }, [searchQuery, computersWithWarranty]);
 
-  const handleSearch = useCallback((e?: React.FormEvent) => {
-    e?.preventDefault();
-    setSearchTerm(query);
-  }, [query]);
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter") {
-        handleSearch();
-      }
-    },
-    [handleSearch]
-  );
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setHasSearched(true);
+  };
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
-
+      
       <main className="container mx-auto px-4 py-8">
         {/* Hero Section */}
         <div className="text-center mb-8">
@@ -64,37 +60,26 @@ export default function SearchPage() {
                 <Input
                   type="text"
                   placeholder="ค้นหาด้วยชื่อคอม หรือ ซีเรียลนัมเบอร์..."
-                  value={query}
+                  value={searchQuery}
                   onChange={(e) => {
-                    setQuery(e.target.value);
-                    if (!e.target.value.trim()) setSearchTerm("");
+                    setSearchQuery(e.target.value);
+                    if (!e.target.value.trim()) setHasSearched(false);
                   }}
-                  onKeyDown={handleKeyDown}
                   className="pl-10 h-12 text-lg"
                 />
               </div>
-              <Button type="submit" size="lg" className="h-12 px-8" disabled={loading}>
-                {loading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <>
-                    <Search className="h-5 w-5 mr-2" />
-                    ค้นหา
-                  </>
-                )}
+              <Button type="submit" size="lg" className="h-12 px-8">
+                <Search className="h-5 w-5 mr-2" />
+                ค้นหา
               </Button>
             </form>
           </CardContent>
         </Card>
 
         {/* Search Results */}
-        {searchTerm && (
+        {hasSearched && (
           <div className="max-w-2xl mx-auto">
-            {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : searchResults.length > 0 ? (
+            {searchResults.length > 0 ? (
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
                   พบ {searchResults.length} รายการ
@@ -111,7 +96,7 @@ export default function SearchPage() {
                   </div>
                   <h3 className="text-lg font-semibold mb-2">ไม่พบข้อมูล</h3>
                   <p className="text-muted-foreground">
-                    ไม่พบคอมพิวเตอร์ที่ตรงกับ "{searchTerm}"
+                    ไม่พบคอมพิวเตอร์ที่ตรงกับ "{searchQuery}"
                   </p>
                 </CardContent>
               </Card>
@@ -120,7 +105,7 @@ export default function SearchPage() {
         )}
 
         {/* Quick Tips */}
-        {!searchTerm && (
+        {!hasSearched && (
           <div className="max-w-2xl mx-auto">
             <Card className="bg-muted/50 border-dashed">
               <CardContent className="pt-6">
@@ -128,6 +113,7 @@ export default function SearchPage() {
                 <ul className="space-y-2 text-sm text-muted-foreground">
                   <li>• ค้นหาด้วยชื่อคอม: <span className="font-mono bg-background px-2 py-1 rounded">PC-SALES-001</span></li>
                   <li>• ค้นหาด้วยซีเรียล: <span className="font-mono bg-background px-2 py-1 rounded">DELL-XPS15-2024</span></li>
+                  <li>• ค้นหาบางส่วน: <span className="font-mono bg-background px-2 py-1 rounded">SALES</span> หรือ <span className="font-mono bg-background px-2 py-1 rounded">DELL</span></li>
                 </ul>
               </CardContent>
             </Card>
