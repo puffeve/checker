@@ -1,42 +1,46 @@
-import { useState, useMemo } from "react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { useState, useMemo, useCallback } from "react";
 import { Header } from "@/components/Header";
 import { ComputerCard } from "@/components/ComputerCard";
-import { mockComputers } from "@/data/mockComputers";
-import { enrichComputerWithWarranty } from "@/utils/warrantyUtils";
-import { Search, Monitor } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useComputers } from "@/hooks/useComputers";
+import { Search, Monitor, Loader2 } from "lucide-react";
 
 export default function SearchPage() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [hasSearched, setHasSearched] = useState(false);
-
-  const computersWithWarranty = useMemo(
-    () => mockComputers.map(enrichComputerWithWarranty),
-    []
-  );
+  const { computers, loading } = useComputers();
+  const [query, setQuery] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
 
   const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    
-    const query = searchQuery.toLowerCase().trim();
-    return computersWithWarranty.filter(
-      (computer) =>
-        computer.name.toLowerCase().includes(query) ||
-        computer.serialNumber.toLowerCase().includes(query)
-    );
-  }, [searchQuery, computersWithWarranty]);
+    if (!searchTerm.trim()) return [];
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setHasSearched(true);
-  };
+    const normalizedSearch = searchTerm.toLowerCase().trim();
+    return computers.filter(
+      (computer) =>
+        computer.name.toLowerCase().includes(normalizedSearch) ||
+        computer.serialNumber.toLowerCase().includes(normalizedSearch)
+    );
+  }, [computers, searchTerm]);
+
+  const handleSearch = useCallback((e?: React.FormEvent) => {
+    e?.preventDefault();
+    setSearchTerm(query);
+  }, [query]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter") {
+        handleSearch();
+      }
+    },
+    [handleSearch]
+  );
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      
+
       <main className="container mx-auto px-4 py-8">
         {/* Hero Section */}
         <div className="text-center mb-8">
@@ -60,26 +64,37 @@ export default function SearchPage() {
                 <Input
                   type="text"
                   placeholder="ค้นหาด้วยชื่อคอม หรือ ซีเรียลนัมเบอร์..."
-                  value={searchQuery}
+                  value={query}
                   onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    if (!e.target.value.trim()) setHasSearched(false);
+                    setQuery(e.target.value);
+                    if (!e.target.value.trim()) setSearchTerm("");
                   }}
+                  onKeyDown={handleKeyDown}
                   className="pl-10 h-12 text-lg"
                 />
               </div>
-              <Button type="submit" size="lg" className="h-12 px-8">
-                <Search className="h-5 w-5 mr-2" />
-                ค้นหา
+              <Button type="submit" size="lg" className="h-12 px-8" disabled={loading}>
+                {loading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <>
+                    <Search className="h-5 w-5 mr-2" />
+                    ค้นหา
+                  </>
+                )}
               </Button>
             </form>
           </CardContent>
         </Card>
 
         {/* Search Results */}
-        {hasSearched && (
+        {searchTerm && (
           <div className="max-w-2xl mx-auto">
-            {searchResults.length > 0 ? (
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : searchResults.length > 0 ? (
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
                   พบ {searchResults.length} รายการ
@@ -96,7 +111,7 @@ export default function SearchPage() {
                   </div>
                   <h3 className="text-lg font-semibold mb-2">ไม่พบข้อมูล</h3>
                   <p className="text-muted-foreground">
-                    ไม่พบคอมพิวเตอร์ที่ตรงกับ "{searchQuery}"
+                    ไม่พบคอมพิวเตอร์ที่ตรงกับ "{searchTerm}"
                   </p>
                 </CardContent>
               </Card>
@@ -105,7 +120,7 @@ export default function SearchPage() {
         )}
 
         {/* Quick Tips */}
-        {!hasSearched && (
+        {!searchTerm && (
           <div className="max-w-2xl mx-auto">
             <Card className="bg-muted/50 border-dashed">
               <CardContent className="pt-6">

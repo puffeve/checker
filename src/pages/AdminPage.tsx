@@ -6,10 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Header } from "@/components/Header";
 import { WarrantyBadge } from "@/components/WarrantyBadge";
 import { StatusBadge } from "@/components/StatusBadge";
-import { AdminLogin } from "@/components/AdminLogin";
-import { useAdminAuth } from "@/hooks/useAdminAuth";
-import { mockComputers, departments } from "@/data/mockComputers";
-import { enrichComputerWithWarranty } from "@/utils/warrantyUtils";
+import { AuthForm } from "@/components/AuthForm";
+import { ComputerFormDialog } from "@/components/ComputerFormDialog";
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { useAuth } from "@/hooks/useAuth";
+import { useComputers, type ComputerInput } from "@/hooks/useComputers";
+import { departments } from "@/data/mockComputers";
 import {
   Table,
   TableBody,
@@ -36,70 +38,108 @@ import {
   Search,
   Filter,
   LogOut,
+  Plus,
+  Pencil,
+  Trash2,
+  Loader2,
 } from "lucide-react";
+import type { ComputerWithWarranty } from "@/types/computer";
 
 export default function AdminPage() {
   const navigate = useNavigate();
-  const { isAuthenticated, login, logout } = useAdminAuth();
+  const { isAuthenticated, loading: authLoading, signOut } = useAuth();
+  const { computers, loading: dataLoading, addComputer, updateComputer, deleteComputer } = useComputers();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("ทั้งหมด");
   const [warrantyFilter, setWarrantyFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const handleLogout = () => {
-    logout();
+  // Dialog states
+  const [formDialogOpen, setFormDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedComputer, setSelectedComputer] = useState<ComputerWithWarranty | null>(null);
+
+  const handleLogout = async () => {
+    await signOut();
     navigate("/");
   };
 
-  const computersWithWarranty = useMemo(
-    () => mockComputers.map(enrichComputerWithWarranty),
-    []
-  );
+  const handleAdd = () => {
+    setSelectedComputer(null);
+    setFormDialogOpen(true);
+  };
+
+  const handleEdit = (computer: ComputerWithWarranty) => {
+    setSelectedComputer(computer);
+    setFormDialogOpen(true);
+  };
+
+  const handleDelete = (computer: ComputerWithWarranty) => {
+    setSelectedComputer(computer);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleFormSubmit = async (data: ComputerInput) => {
+    if (selectedComputer) {
+      return await updateComputer(selectedComputer.id, data);
+    } else {
+      return await addComputer(data);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (selectedComputer) {
+      await deleteComputer(selectedComputer.id);
+      setDeleteDialogOpen(false);
+      setSelectedComputer(null);
+    }
+  };
 
   const filteredComputers = useMemo(() => {
-    return computersWithWarranty.filter((computer) => {
-      // Search filter
+    return computers.filter((computer) => {
       const query = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !query ||
         computer.name.toLowerCase().includes(query) ||
         computer.serialNumber.toLowerCase().includes(query);
 
-      // Department filter
       const matchesDepartment =
         departmentFilter === "ทั้งหมด" || computer.department === departmentFilter;
 
-      // Warranty filter
       const matchesWarranty =
         warrantyFilter === "all" || computer.warrantyStatus === warrantyFilter;
 
-      // Status filter
       const matchesStatus =
         statusFilter === "all" || computer.status === statusFilter;
 
       return matchesSearch && matchesDepartment && matchesWarranty && matchesStatus;
     });
-  }, [computersWithWarranty, searchQuery, departmentFilter, warrantyFilter, statusFilter]);
+  }, [computers, searchQuery, departmentFilter, warrantyFilter, statusFilter]);
 
-  // Dashboard stats
   const stats = useMemo(() => {
-    const total = computersWithWarranty.length;
-    const active = computersWithWarranty.filter((c) => c.status === "active").length;
-    const repair = computersWithWarranty.filter((c) => c.status === "repair").length;
-    const retired = computersWithWarranty.filter((c) => c.status === "retired").length;
-    const nearExpiry = computersWithWarranty.filter(
-      (c) => c.warrantyStatus === "warning"
-    ).length;
-    const expired = computersWithWarranty.filter(
-      (c) => c.warrantyStatus === "expired"
-    ).length;
+    const total = computers.length;
+    const active = computers.filter((c) => c.status === "active").length;
+    const repair = computers.filter((c) => c.status === "repair").length;
+    const retired = computers.filter((c) => c.status === "retired").length;
+    const nearExpiry = computers.filter((c) => c.warrantyStatus === "warning").length;
+    const expired = computers.filter((c) => c.warrantyStatus === "expired").length;
 
     return { total, active, repair, retired, nearExpiry, expired };
-  }, [computersWithWarranty]);
+  }, [computers]);
 
-  // Show login screen if not authenticated
+  // Show loading
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Show login form if not authenticated
   if (!isAuthenticated) {
-    return <AdminLogin onLogin={login} />;
+    return <AuthForm />;
   }
 
   return (
@@ -111,10 +151,16 @@ export default function AdminPage() {
           <h2 className="text-2xl font-bold text-foreground">
             แดชบอร์ดผู้ดูแลระบบ
           </h2>
-          <Button variant="outline" size="sm" onClick={handleLogout} className="gap-2">
-            <LogOut className="h-4 w-4" />
-            ออกจากระบบ
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={handleAdd} className="gap-2">
+              <Plus className="h-4 w-4" />
+              เพิ่มคอมพิวเตอร์
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleLogout} className="gap-2">
+              <LogOut className="h-4 w-4" />
+              ออกจากระบบ
+            </Button>
+          </div>
         </div>
 
         {/* Dashboard Stats */}
@@ -278,58 +324,108 @@ export default function AdminPage() {
             <CardTitle className="text-lg flex items-center justify-between">
               <span>รายการคอมพิวเตอร์</span>
               <span className="text-sm font-normal text-muted-foreground">
-                แสดง {filteredComputers.length} จาก {computersWithWarranty.length} รายการ
+                แสดง {filteredComputers.length} จาก {computers.length} รายการ
               </span>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">#</TableHead>
-                    <TableHead>ชื่อคอม</TableHead>
-                    <TableHead className="hidden md:table-cell">ซีเรียลนัมเบอร์</TableHead>
-                    <TableHead className="hidden sm:table-cell">แผนก</TableHead>
-                    <TableHead className="hidden lg:table-cell">วันหมดประกัน</TableHead>
-                    <TableHead>สถานะประกัน</TableHead>
-                    <TableHead>สถานะเครื่อง</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredComputers.map((computer, index) => (
-                    <TableRow key={computer.id}>
-                      <TableCell className="font-medium">{index + 1}</TableCell>
-                      <TableCell className="font-medium">{computer.name}</TableCell>
-                      <TableCell className="hidden md:table-cell font-mono text-sm">
-                        {computer.serialNumber}
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        {computer.department}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        {format(parseISO(computer.warrantyEndDate), "d MMM yyyy", {
-                          locale: th,
-                        })}
-                      </TableCell>
-                      <TableCell>
-                        <WarrantyBadge
-                          status={computer.warrantyStatus}
-                          daysUntilExpiry={computer.daysUntilExpiry}
-                          showDays={false}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={computer.status} />
-                      </TableCell>
+            {dataLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">#</TableHead>
+                      <TableHead>ชื่อคอม</TableHead>
+                      <TableHead className="hidden md:table-cell">ซีเรียลนัมเบอร์</TableHead>
+                      <TableHead className="hidden sm:table-cell">แผนก</TableHead>
+                      <TableHead className="hidden lg:table-cell">วันหมดประกัน</TableHead>
+                      <TableHead>สถานะประกัน</TableHead>
+                      <TableHead>สถานะเครื่อง</TableHead>
+                      <TableHead className="w-24">จัดการ</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredComputers.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                          ไม่พบข้อมูล
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredComputers.map((computer, index) => (
+                        <TableRow key={computer.id}>
+                          <TableCell className="font-medium">{index + 1}</TableCell>
+                          <TableCell className="font-medium">{computer.name}</TableCell>
+                          <TableCell className="hidden md:table-cell font-mono text-sm">
+                            {computer.serialNumber}
+                          </TableCell>
+                          <TableCell className="hidden sm:table-cell">
+                            {computer.department}
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell">
+                            {format(parseISO(computer.warrantyEndDate), "d MMM yyyy", {
+                              locale: th,
+                            })}
+                          </TableCell>
+                          <TableCell>
+                            <WarrantyBadge
+                              status={computer.warrantyStatus}
+                              daysUntilExpiry={computer.daysUntilExpiry}
+                              showDays={false}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <StatusBadge status={computer.status} />
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEdit(computer)}
+                                className="h-8 w-8"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDelete(computer)}
+                                className="h-8 w-8 text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
       </main>
+
+      {/* Dialogs */}
+      <ComputerFormDialog
+        open={formDialogOpen}
+        onOpenChange={setFormDialogOpen}
+        computer={selectedComputer}
+        onSubmit={handleFormSubmit}
+      />
+
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        computerName={selectedComputer?.name || ""}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 }
