@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,9 +8,11 @@ import { Header } from "@/components/Header";
 import { WarrantyBadge } from "@/components/WarrantyBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AdminLogin } from "@/components/AdminLogin";
+import { EditComputerDialog } from "@/components/EditComputerDialog";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
-import { mockComputers, departments } from "@/data/mockComputers";
-import { enrichComputerWithWarranty } from "@/utils/warrantyUtils";
+import { useComputers } from "@/hooks/useComputers";
+import { departments } from "@/data/mockComputers";
+import { getWarrantyStatus, getDaysUntilExpiry } from "@/utils/warrantyUtils";
 import {
   Table,
   TableBody,
@@ -36,25 +39,57 @@ import {
   Search,
   Filter,
   LogOut,
+  Pencil,
+  Loader2,
 } from "lucide-react";
+import { ComputerStatus } from "@/types/computer";
 
 export default function AdminPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { isAuthenticated, login, logout } = useAdminAuth();
+  const { data: computersData, isLoading, error } = useComputers();
+  
   const [searchQuery, setSearchQuery] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("ทั้งหมด");
   const [warrantyFilter, setWarrantyFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  
+  // Edit dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [selectedComputer, setSelectedComputer] = useState<{
+    id: string;
+    name: string;
+    serial_number: string;
+    department: string;
+    status: string;
+    registration_date: string;
+    warranty_end_date: string;
+  } | null>(null);
 
   const handleLogout = () => {
     logout();
     navigate("/");
   };
 
-  const computersWithWarranty = useMemo(
-    () => mockComputers.map(enrichComputerWithWarranty),
-    []
-  );
+  const handleEdit = (computer: typeof selectedComputer) => {
+    setSelectedComputer(computer);
+    setEditDialogOpen(true);
+  };
+
+  const handleEditSuccess = () => {
+    queryClient.invalidateQueries({ queryKey: ["computers"] });
+  };
+
+  // Transform database data to include warranty info
+  const computersWithWarranty = useMemo(() => {
+    if (!computersData) return [];
+    return computersData.map((computer) => ({
+      ...computer,
+      warrantyStatus: getWarrantyStatus(computer.warranty_end_date),
+      daysUntilExpiry: getDaysUntilExpiry(computer.warranty_end_date),
+    }));
+  }, [computersData]);
 
   const filteredComputers = useMemo(() => {
     return computersWithWarranty.filter((computer) => {
@@ -63,7 +98,7 @@ export default function AdminPage() {
       const matchesSearch =
         !query ||
         computer.name.toLowerCase().includes(query) ||
-        computer.serialNumber.toLowerCase().includes(query);
+        computer.serial_number.toLowerCase().includes(query);
 
       // Department filter
       const matchesDepartment =
@@ -283,53 +318,84 @@ export default function AdminPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">#</TableHead>
-                    <TableHead>ชื่อคอม</TableHead>
-                    <TableHead className="hidden md:table-cell">ซีเรียลนัมเบอร์</TableHead>
-                    <TableHead className="hidden sm:table-cell">แผนก</TableHead>
-                    <TableHead className="hidden lg:table-cell">วันหมดประกัน</TableHead>
-                    <TableHead>สถานะประกัน</TableHead>
-                    <TableHead>สถานะเครื่อง</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredComputers.map((computer, index) => (
-                    <TableRow key={computer.id}>
-                      <TableCell className="font-medium">{index + 1}</TableCell>
-                      <TableCell className="font-medium">{computer.name}</TableCell>
-                      <TableCell className="hidden md:table-cell font-mono text-sm">
-                        {computer.serialNumber}
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        {computer.department}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        {format(parseISO(computer.warrantyEndDate), "d MMM yyyy", {
-                          locale: th,
-                        })}
-                      </TableCell>
-                      <TableCell>
-                        <WarrantyBadge
-                          status={computer.warrantyStatus}
-                          daysUntilExpiry={computer.daysUntilExpiry}
-                          showDays={false}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={computer.status} />
-                      </TableCell>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <span className="ml-2 text-muted-foreground">กำลังโหลดข้อมูล...</span>
+              </div>
+            ) : error ? (
+              <div className="flex items-center justify-center py-12 text-destructive">
+                <XCircle className="h-5 w-5 mr-2" />
+                เกิดข้อผิดพลาดในการโหลดข้อมูล
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">#</TableHead>
+                      <TableHead>ชื่อคอม</TableHead>
+                      <TableHead className="hidden md:table-cell">ซีเรียลนัมเบอร์</TableHead>
+                      <TableHead className="hidden sm:table-cell">แผนก</TableHead>
+                      <TableHead className="hidden lg:table-cell">วันหมดประกัน</TableHead>
+                      <TableHead>สถานะประกัน</TableHead>
+                      <TableHead>สถานะเครื่อง</TableHead>
+                      <TableHead className="w-20">จัดการ</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredComputers.map((computer, index) => (
+                      <TableRow key={computer.id}>
+                        <TableCell className="font-medium">{index + 1}</TableCell>
+                        <TableCell className="font-medium">{computer.name}</TableCell>
+                        <TableCell className="hidden md:table-cell font-mono text-sm">
+                          {computer.serial_number}
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          {computer.department}
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          {format(parseISO(computer.warranty_end_date), "d MMM yyyy", {
+                            locale: th,
+                          })}
+                        </TableCell>
+                        <TableCell>
+                          <WarrantyBadge
+                            status={computer.warrantyStatus}
+                            daysUntilExpiry={computer.daysUntilExpiry}
+                            showDays={false}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge status={computer.status as ComputerStatus} />
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEdit(computer)}
+                            title="แก้ไข"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
       </main>
+
+      {/* Edit Dialog */}
+      <EditComputerDialog
+        computer={selectedComputer}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        onSuccess={handleEditSuccess}
+      />
     </div>
   );
 }
