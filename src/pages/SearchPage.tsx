@@ -113,7 +113,6 @@ export default function SearchPage() {
                 <ul className="space-y-2 text-sm text-muted-foreground">
                   <li>• ค้นหาด้วยชื่อคอม: <span className="font-mono bg-background px-2 py-1 rounded">PC-SALES-001</span></li>
                   <li>• ค้นหาด้วยซีเรียล: <span className="font-mono bg-background px-2 py-1 rounded">DELL-XPS15-2024</span></li>
-                  <li>• ค้นหาบางส่วน: <span className="font-mono bg-background px-2 py-1 rounded">SALES</span> หรือ <span className="font-mono bg-background px-2 py-1 rounded">DELL</span></li>
                 </ul>
               </CardContent>
             </Card>

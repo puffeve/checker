@@ -16,7 +16,7 @@ export function Header() {
             </div>
             <div>
               <h1 className="text-lg font-bold">ระบบตรวจสอบซีเรียลนัมเบอร์</h1>
-              <p className="text-xs text-sidebar-foreground/70">บริษัท ออโต้ พรีเมียม จำกัด</p>
+              <p className="text-xs text-sidebar-foreground/70">Greenwing & Angelway Group</p>
             </div>
           </div>
 
