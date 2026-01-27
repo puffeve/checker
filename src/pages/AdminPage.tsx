@@ -11,6 +11,7 @@ import { AdminLogin } from "@/components/AdminLogin";
 import { EditComputerDialog } from "@/components/EditComputerDialog";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { useComputers } from "@/hooks/useComputers";
+import { departments } from "@/data/mockComputers";
 import { getWarrantyStatus, getDaysUntilExpiry } from "@/utils/warrantyUtils";
 import {
   Table,
@@ -27,7 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { format, parseISO, isValid } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { th } from "date-fns/locale";
 import {
   Monitor,
@@ -71,16 +72,8 @@ export default function AdminPage() {
     navigate("/");
   };
 
-  const handleEdit = (computer: any) => {
-    setSelectedComputer({
-        id: computer.id,
-        name: computer.name,
-        serial_number: computer.serial_number,
-        department: computer.department,
-        status: computer.status,
-        registration_date: computer.created_at || new Date().toISOString(),
-        warranty_end_date: computer.warranty_end_date
-    });
+  const handleEdit = (computer: typeof selectedComputer) => {
+    setSelectedComputer(computer);
     setEditDialogOpen(true);
   };
 
@@ -88,59 +81,34 @@ export default function AdminPage() {
     queryClient.invalidateQueries({ queryKey: ["computers"] });
   };
 
-  // 1. แปลงข้อมูลจาก DB ให้เข้ากับหน้าเว็บ
+  // Transform database data to include warranty info
   const computersWithWarranty = useMemo(() => {
     if (!computersData) return [];
-    
-    return computersData.map((computer) => {
-      try {
-        const warrantyDate = computer.warranty_expiry; 
-        const isDateValid = warrantyDate && warrantyDate !== "-" && warrantyDate.length > 5;
-
-        return {
-          ...computer,
-          name: computer.device_name || "Unknown Device", 
-          department: computer.notes || "-", 
-          warranty_end_date: warrantyDate,
-          warrantyStatus: isDateValid ? getWarrantyStatus(warrantyDate) : "expired",
-          daysUntilExpiry: isDateValid ? getDaysUntilExpiry(warrantyDate) : 0,
-        };
-      } catch (err) {
-        console.error("Error mapping computer:", computer, err);
-        return {
-          ...computer,
-          name: "Error Loading Item",
-          department: "-",
-          warranty_end_date: "-",
-          warrantyStatus: "expired",
-          daysUntilExpiry: 0,
-        };
-      }
-    });
+    return computersData.map((computer) => ({
+      ...computer,
+      warrantyStatus: getWarrantyStatus(computer.warranty_end_date),
+      daysUntilExpiry: getDaysUntilExpiry(computer.warranty_end_date),
+    }));
   }, [computersData]);
-
-  // 2. สร้างรายการตัวกรอง
-  const uniqueDepartments = useMemo(() => {
-    if (!computersWithWarranty) return [];
-    const depts = new Set(computersWithWarranty.map(c => c.department).filter(d => d && d !== "-"));
-    return Array.from(depts).sort();
-  }, [computersWithWarranty]);
 
   const filteredComputers = useMemo(() => {
     return computersWithWarranty.filter((computer) => {
+      // Search filter
       const query = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !query ||
-        (computer.name || "").toLowerCase().includes(query) ||
-        (computer.serial_number || "").toLowerCase().includes(query) ||
-        (computer.department || "").toLowerCase().includes(query);
+        computer.name.toLowerCase().includes(query) ||
+        computer.serial_number.toLowerCase().includes(query);
 
+      // Department filter
       const matchesDepartment =
         departmentFilter === "ทั้งหมด" || computer.department === departmentFilter;
 
+      // Warranty filter
       const matchesWarranty =
         warrantyFilter === "all" || computer.warrantyStatus === warrantyFilter;
 
+      // Status filter
       const matchesStatus =
         statusFilter === "all" || computer.status === statusFilter;
 
@@ -151,8 +119,9 @@ export default function AdminPage() {
   // Dashboard stats
   const stats = useMemo(() => {
     const total = computersWithWarranty.length;
-    const active = computersWithWarranty.filter((c) => c.status === "active" || c.status === "available").length;
-    // เอา repair กับ retired ออกจากการคำนวณสถิติเพื่อความคลีน (แต่ถ้าจะใช้ก็เก็บไว้ได้)
+    const active = computersWithWarranty.filter((c) => c.status === "active").length;
+    const repair = computersWithWarranty.filter((c) => c.status === "repair").length;
+    const retired = computersWithWarranty.filter((c) => c.status === "retired").length;
     const nearExpiry = computersWithWarranty.filter(
       (c) => c.warrantyStatus === "warning"
     ).length;
@@ -160,9 +129,10 @@ export default function AdminPage() {
       (c) => c.warrantyStatus === "expired"
     ).length;
 
-    return { total, active, nearExpiry, expired };
+    return { total, active, repair, retired, nearExpiry, expired };
   }, [computersWithWarranty]);
 
+  // Show login screen if not authenticated
   if (!isAuthenticated) {
     return <AdminLogin onLogin={login} />;
   }
@@ -182,11 +152,13 @@ export default function AdminPage() {
           </Button>
         </div>
 
-        {/* Dashboard Stats (ลบ ซ่อมบำรุง/ปลดระวาง ออกแล้ว เหลือ 4 ช่อง) */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        {/* Dashboard Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">ทั้งหมด</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                ทั้งหมด
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
@@ -198,39 +170,78 @@ export default function AdminPage() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">ใช้งานปกติ</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                ใช้งาน
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
                 <Monitor className="h-5 w-5 text-warranty-valid" />
-                <span className="text-2xl font-bold text-warranty-valid">{stats.active}</span>
+                <span className="text-2xl font-bold text-warranty-valid">
+                  {stats.active}
+                </span>
               </div>
             </CardContent>
           </Card>
 
-          {/* ลบ Card ซ่อมบำรุง ออก */}
-          {/* ลบ Card ปลดระวาง ออก */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                ซ่อม
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <Wrench className="h-5 w-5 text-warranty-warning" />
+                <span className="text-2xl font-bold text-warranty-warning">
+                  {stats.repair}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                ปลดระวาง
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <Archive className="h-5 w-5 text-muted-foreground" />
+                <span className="text-2xl font-bold">{stats.retired}</span>
+              </div>
+            </CardContent>
+          </Card>
 
           <Card className="border-warranty-warning">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">ใกล้หมดประกัน</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                ใกล้หมดประกัน
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-warranty-warning" />
-                <span className="text-2xl font-bold text-warranty-warning">{stats.nearExpiry}</span>
+                <span className="text-2xl font-bold text-warranty-warning">
+                  {stats.nearExpiry}
+                </span>
               </div>
             </CardContent>
           </Card>
 
           <Card className="border-warranty-expired">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">หมดประกัน</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                หมดประกัน
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
                 <XCircle className="h-5 w-5 text-warranty-expired" />
-                <span className="text-2xl font-bold text-warranty-expired">{stats.expired}</span>
+                <span className="text-2xl font-bold text-warranty-expired">
+                  {stats.expired}
+                </span>
               </div>
             </CardContent>
           </Card>
@@ -249,7 +260,7 @@ export default function AdminPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="ค้นหาชื่อ, ซีเรียล, ผู้ใช้งาน..."
+                  placeholder="ค้นหาชื่อคอม / ซีเรียล..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-9"
@@ -258,11 +269,10 @@ export default function AdminPage() {
 
               <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
                 <SelectTrigger>
-                  <SelectValue placeholder="ผู้ใช้งาน / หมายเหตุ" />
+                  <SelectValue placeholder="แผนก" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ทั้งหมด">ทั้งหมด</SelectItem>
-                  {uniqueDepartments.map((dept) => (
+                  {departments.map((dept) => (
                     <SelectItem key={dept} value={dept}>
                       {dept}
                     </SelectItem>
@@ -288,10 +298,8 @@ export default function AdminPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">สถานะทั้งหมด</SelectItem>
-                  <SelectItem value="available">ใช้งานปกติ (Available)</SelectItem>
-                  <SelectItem value="active">ใช้งาน (Active)</SelectItem>
-                  <SelectItem value="maintenance">ซ่อมบำรุง (Maintenance)</SelectItem>
-                  <SelectItem value="repair">ส่งซ่อม (Repair)</SelectItem>
+                  <SelectItem value="active">ใช้งาน</SelectItem>
+                  <SelectItem value="repair">ซ่อม</SelectItem>
                   <SelectItem value="retired">ปลดระวาง</SelectItem>
                 </SelectContent>
               </Select>
@@ -318,7 +326,7 @@ export default function AdminPage() {
             ) : error ? (
               <div className="flex items-center justify-center py-12 text-destructive">
                 <XCircle className="h-5 w-5 mr-2" />
-                เกิดข้อผิดพลาด: {(error as Error).message}
+                เกิดข้อผิดพลาดในการโหลดข้อมูล
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -328,7 +336,7 @@ export default function AdminPage() {
                       <TableHead className="w-12">#</TableHead>
                       <TableHead>ชื่อคอม</TableHead>
                       <TableHead className="hidden md:table-cell">ซีเรียลนัมเบอร์</TableHead>
-                      <TableHead className="hidden sm:table-cell">ผู้ใช้งาน / หมายเหตุ</TableHead>
+                      <TableHead className="hidden sm:table-cell">แผนก</TableHead>
                       <TableHead className="hidden lg:table-cell">วันหมดประกัน</TableHead>
                       <TableHead>สถานะประกัน</TableHead>
                       <TableHead>สถานะเครื่อง</TableHead>
@@ -337,22 +345,19 @@ export default function AdminPage() {
                   </TableHeader>
                   <TableBody>
                     {filteredComputers.map((computer, index) => (
-                      <TableRow key={computer.id || index}>
+                      <TableRow key={computer.id}>
                         <TableCell className="font-medium">{index + 1}</TableCell>
-                        <TableCell className="font-medium">
-                            {computer.name}
-                            <div className="text-xs text-muted-foreground md:hidden">{computer.serial_number}</div>
-                        </TableCell>
+                        <TableCell className="font-medium">{computer.name}</TableCell>
                         <TableCell className="hidden md:table-cell font-mono text-sm">
                           {computer.serial_number}
                         </TableCell>
-                        <TableCell className="hidden sm:table-cell text-sm">
+                        <TableCell className="hidden sm:table-cell">
                           {computer.department}
                         </TableCell>
                         <TableCell className="hidden lg:table-cell">
-                          {computer.warranty_end_date && computer.warranty_end_date !== "-" && isValid(parseISO(computer.warranty_end_date)) 
-                            ? format(parseISO(computer.warranty_end_date), "d MMM yyyy", { locale: th }) 
-                            : "-"}
+                          {format(parseISO(computer.warranty_end_date), "d MMM yyyy", {
+                            locale: th,
+                          })}
                         </TableCell>
                         <TableCell>
                           <WarrantyBadge
