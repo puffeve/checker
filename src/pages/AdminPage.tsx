@@ -4,11 +4,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Header } from "@/components/Header";
 import { WarrantyBadge } from "@/components/WarrantyBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AdminLogin } from "@/components/AdminLogin";
 import { EditComputerDialog } from "@/components/EditComputerDialog";
+import { AddComputerDialog } from "@/components/AddComputerDialog";
+import { DeleteComputerDialog } from "@/components/DeleteComputerDialog";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { useComputers } from "@/hooks/useComputers";
 import { departments } from "@/data/mockComputers";
@@ -32,8 +35,6 @@ import { format, parseISO } from "date-fns";
 import { th } from "date-fns/locale";
 import {
   Monitor,
-  Wrench,
-  Archive,
   AlertTriangle,
   XCircle,
   Search,
@@ -41,6 +42,7 @@ import {
   LogOut,
   Pencil,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import { ComputerStatus } from "@/types/computer";
 
@@ -53,7 +55,10 @@ export default function AdminPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("ทั้งหมด");
   const [warrantyFilter, setWarrantyFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -79,6 +84,27 @@ export default function AdminPage() {
 
   const handleEditSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ["computers"] });
+  };
+
+  const handleDeleteSuccess = () => {
+    setSelectedIds([]);
+    queryClient.invalidateQueries({ queryKey: ["computers"] });
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(filteredComputers.map((c) => c.id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleSelectOne = (id: string, checked: boolean) => {
+    if (checked) {
+      setSelectedIds((prev) => [...prev, id]);
+    } else {
+      setSelectedIds((prev) => prev.filter((prevId) => prevId !== id));
+    }
   };
 
   // Transform database data to include warranty info
@@ -108,20 +134,14 @@ export default function AdminPage() {
       const matchesWarranty =
         warrantyFilter === "all" || computer.warrantyStatus === warrantyFilter;
 
-      // Status filter
-      const matchesStatus =
-        statusFilter === "all" || computer.status === statusFilter;
-
-      return matchesSearch && matchesDepartment && matchesWarranty && matchesStatus;
+      return matchesSearch && matchesDepartment && matchesWarranty;
     });
-  }, [computersWithWarranty, searchQuery, departmentFilter, warrantyFilter, statusFilter]);
+  }, [computersWithWarranty, searchQuery, departmentFilter, warrantyFilter]);
 
   // Dashboard stats
   const stats = useMemo(() => {
     const total = computersWithWarranty.length;
     const active = computersWithWarranty.filter((c) => c.status === "active").length;
-    const repair = computersWithWarranty.filter((c) => c.status === "repair").length;
-    const retired = computersWithWarranty.filter((c) => c.status === "retired").length;
     const nearExpiry = computersWithWarranty.filter(
       (c) => c.warrantyStatus === "warning"
     ).length;
@@ -129,7 +149,7 @@ export default function AdminPage() {
       (c) => c.warrantyStatus === "expired"
     ).length;
 
-    return { total, active, repair, retired, nearExpiry, expired };
+    return { total, active, nearExpiry, expired };
   }, [computersWithWarranty]);
 
   // Show login screen if not authenticated
@@ -146,14 +166,17 @@ export default function AdminPage() {
           <h2 className="text-2xl font-bold text-foreground">
             แดชบอร์ดผู้ดูแลระบบ
           </h2>
-          <Button variant="outline" size="sm" onClick={handleLogout} className="gap-2">
-            <LogOut className="h-4 w-4" />
-            ออกจากระบบ
-          </Button>
+          <div className="flex items-center gap-2">
+            <AddComputerDialog onSuccess={handleEditSuccess} />
+            <Button variant="outline" size="sm" onClick={handleLogout} className="gap-2">
+              <LogOut className="h-4 w-4" />
+              ออกจากระบบ
+            </Button>
+          </div>
         </div>
 
         {/* Dashboard Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -180,36 +203,6 @@ export default function AdminPage() {
                 <span className="text-2xl font-bold text-warranty-valid">
                   {stats.active}
                 </span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                ซ่อม
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <Wrench className="h-5 w-5 text-warranty-warning" />
-                <span className="text-2xl font-bold text-warranty-warning">
-                  {stats.repair}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                ปลดระวาง
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <Archive className="h-5 w-5 text-muted-foreground" />
-                <span className="text-2xl font-bold">{stats.retired}</span>
               </div>
             </CardContent>
           </Card>
@@ -256,7 +249,7 @@ export default function AdminPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -291,18 +284,6 @@ export default function AdminPage() {
                   <SelectItem value="expired">หมดประกัน</SelectItem>
                 </SelectContent>
               </Select>
-
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="สถานะเครื่อง" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">สถานะทั้งหมด</SelectItem>
-                  <SelectItem value="active">ใช้งาน</SelectItem>
-                  <SelectItem value="repair">ซ่อม</SelectItem>
-                  <SelectItem value="retired">ปลดระวาง</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
           </CardContent>
         </Card>
@@ -311,7 +292,20 @@ export default function AdminPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-lg flex items-center justify-between">
-              <span>รายการคอมพิวเตอร์</span>
+              <div className="flex items-center gap-2">
+                <span>รายการคอมพิวเตอร์</span>
+                {selectedIds.length > 0 && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="gap-1"
+                    onClick={() => setDeleteDialogOpen(true)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    ลบ ({selectedIds.length})
+                  </Button>
+                )}
+              </div>
               <span className="text-sm font-normal text-muted-foreground">
                 แสดง {filteredComputers.length} จาก {computersWithWarranty.length} รายการ
               </span>
@@ -333,6 +327,15 @@ export default function AdminPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-12">
+                        <Checkbox
+                          checked={
+                            filteredComputers.length > 0 &&
+                            selectedIds.length === filteredComputers.length
+                          }
+                          onCheckedChange={handleSelectAll}
+                        />
+                      </TableHead>
                       <TableHead className="w-12">#</TableHead>
                       <TableHead>ชื่อคอม</TableHead>
                       <TableHead className="hidden md:table-cell">ซีเรียลนัมเบอร์</TableHead>
@@ -346,6 +349,14 @@ export default function AdminPage() {
                   <TableBody>
                     {filteredComputers.map((computer, index) => (
                       <TableRow key={computer.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedIds.includes(computer.id)}
+                            onCheckedChange={(checked) =>
+                              handleSelectOne(computer.id, !!checked)
+                            }
+                          />
+                        </TableCell>
                         <TableCell className="font-medium">{index + 1}</TableCell>
                         <TableCell className="font-medium">{computer.name}</TableCell>
                         <TableCell className="hidden md:table-cell font-mono text-sm">
@@ -395,6 +406,14 @@ export default function AdminPage() {
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
         onSuccess={handleEditSuccess}
+      />
+
+      {/* Delete Dialog */}
+      <DeleteComputerDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        computerIds={selectedIds}
+        onSuccess={handleDeleteSuccess}
       />
     </div>
   );
