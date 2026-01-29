@@ -86,3 +86,5 @@ export function useComputers() {
     },
   });
 }
+
+// ตัวอย่างการใช้งานภายใน component
