@@ -1,5 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { Database } from "@/integrations/supabase/types"; // นำเข้า Type ที่เราแก้เมื่อกี้
+
+// ใช้ Type จาก Database ตรงๆ เพื่อความปลอดภัย
+type ComputerRow = Database['public']['Tables']['computers']['Row'];
 
 export interface ComputerFromDB {
   id: number;
@@ -10,6 +14,7 @@ export interface ComputerFromDB {
   warranty_expiry: string;
   notes: string;
   created_at: string;
+  user_name: string;
 }
 
 const parseThaiDate = (thaiDate: string) => {
@@ -41,11 +46,9 @@ export function useComputers() {
   return useQuery({
     queryKey: ["computers"],
     queryFn: async (): Promise<ComputerFromDB[]> => {
-      console.log("กำลังดึงข้อมูลจาก Supabase...");
-
-      // 1. ดึงข้อมูลจากตาราง computer_rentals
+      // ระบุ <any, "computers", any> หรือ <Database> เพื่อให้ TS รู้จัก Table
       const { data, error } = await supabase
-        .from("computer_rentals") 
+        .from("computers") 
         .select("*");
 
       if (error) {
@@ -53,38 +56,33 @@ export function useComputers() {
         throw error;
       }
 
-      console.log("✅ ข้อมูลที่ได้จาก DB:", data);
+      if (!data) return [];
 
-      if (!data) {
-        return [];
-      }
-
-      // 2. แปลงข้อมูล (ใส่กันกระแทกไว้ ถ้า data เป็น null จะไม่พัง)
-      const mappedData = (data || []).map((item: any, index: number) => {
-        // ดึงค่าแบบปลอดภัย (ถ้าไม่มีคอลัมน์ ให้ใช้ค่าว่าง)
-        const endDateRaw = item.contract_end_date || "";
-        const expiryDate = parseThaiDate(endDateRaw);
+      // ใช้ item: ComputerRow แทน item: any เพื่อให้มี Auto-complete
+      return data.map((item: ComputerRow, index: number) => {
+        const expiryRaw = item.warranty_expiry || "";
+        const expiryDate = parseThaiDate(expiryRaw);
         
-        let status = "available";
+        let currentStatus = item.status || "active";
+        
         if (expiryDate) {
             const now = new Date();
             const expiry = new Date(expiryDate);
-            if (now > expiry) status = "retired";
+            if (now > expiry) currentStatus = "retired";
         }
 
         return {
-            id: item.id || index, 
-            serial_number: item.serial_number || item.contract_number || "-",
-            device_name: item.model_name || "Unknown Device", 
-            model: item.vendor_name || "-",
-            status: status,
-            warranty_expiry: expiryDate || "-",
-            notes: item.user_name || "", 
-            created_at: new Date().toISOString(),
+            id: Number(item.id) || index, // มั่นใจว่าเป็นตัวเลข
+            serial_number: item.serial_number || "-",
+            device_name: item.device_name || "Unknown Device", 
+            model: item.model || "-", 
+            status: currentStatus,
+            warranty_expiry: expiryRaw, 
+            notes: item.notes || "", 
+            user_name: item.user_name || "",
+            created_at: item.created_at || new Date().toISOString(),
         };
       });
-
-      return mappedData;
     },
   });
 }

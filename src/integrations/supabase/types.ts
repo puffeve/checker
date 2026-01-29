@@ -7,8 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
@@ -16,37 +14,79 @@ export type Database = {
     Tables: {
       computers: {
         Row: {
+          id: number // เปลี่ยนเป็น number ตาม bigint
           created_at: string
-          department: string
-          id: string
-          name: string
-          registration_date: string
-          serial_number: string
-          status: string
-          updated_at: string
-          warranty_end_date: string
+          record_id: string | null
+          model: string | null
+          quantity: number | null
+          contract_start: string | null
+          warranty_expiry: string | null
+          rental_period: string | null
+          contract_number: string | null
+          serial_number: string | null
+          device_name: string | null
+          notes: string | null
+          user_name: string | null
+          site_index: number | null
+          cost_center: string | null
+          allocation: string | null
+          price_before_vat: string | null
+          price_with_vat: string | null
+          extra_note: string | null
+          extra_1: string | null
+          extra_2: string | null
+          extra_3: string | null
+          status: string | null
         }
         Insert: {
+          id?: never // generated always as identity ห้ามใส่เอง
           created_at?: string
-          department: string
-          id?: string
-          name: string
-          registration_date?: string
-          serial_number: string
-          status?: string
-          updated_at?: string
-          warranty_end_date: string
+          record_id?: string | null
+          model?: string | null
+          quantity?: number | null
+          contract_start?: string | null
+          warranty_expiry?: string | null
+          rental_period?: string | null
+          contract_number?: string | null
+          serial_number?: string | null
+          device_name?: string | null
+          notes?: string | null
+          user_name?: string | null
+          site_index?: number | null
+          cost_center?: string | null
+          allocation?: string | null
+          price_before_vat?: string | null
+          price_with_vat?: string | null
+          extra_note?: string | null
+          extra_1?: string | null
+          extra_2?: string | null
+          extra_3?: string | null
+          status?: string | null
         }
         Update: {
+          id?: never
           created_at?: string
-          department?: string
-          id?: string
-          name?: string
-          registration_date?: string
-          serial_number?: string
-          status?: string
-          updated_at?: string
-          warranty_end_date?: string
+          record_id?: string | null
+          model?: string | null
+          quantity?: number | null
+          contract_start?: string | null
+          warranty_expiry?: string | null
+          rental_period?: string | null
+          contract_number?: string | null
+          serial_number?: string | null
+          device_name?: string | null
+          notes?: string | null
+          user_name?: string | null
+          site_index?: number | null
+          cost_center?: string | null
+          allocation?: string | null
+          price_before_vat?: string | null
+          price_with_vat?: string | null
+          extra_note?: string | null
+          extra_1?: string | null
+          extra_2?: string | null
+          extra_3?: string | null
+          status?: string | null
         }
         Relationships: []
       }
