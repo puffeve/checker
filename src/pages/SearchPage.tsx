@@ -4,19 +4,38 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Header } from "@/components/Header";
 import { ComputerCard } from "@/components/ComputerCard";
-import { mockComputers } from "@/data/mockComputers";
-import { enrichComputerWithWarranty } from "@/utils/warrantyUtils";
-import { Search, Monitor } from "lucide-react";
+import { useComputers } from "@/hooks/useComputers";
+import { getWarrantyStatus, getDaysUntilExpiry } from "@/utils/warrantyUtils";
+import { Search, Monitor, Loader2, XCircle } from "lucide-react";
 
 export default function SearchPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
 
-  const computersWithWarranty = useMemo(
-    () => mockComputers.map(enrichComputerWithWarranty),
-    []
-  );
+  // ดึงข้อมูลจริงจาก Supabase
+  const { data: computersData, isLoading, error } = useComputers();
 
+  // แปลงข้อมูลและคำนวณประกัน
+  const computersWithWarranty = useMemo(() => {
+    if (!computersData) return [];
+    
+    return computersData.map((computer) => {
+      const warrantyDate = computer.warranty_expiry;
+      const isDateValid = warrantyDate && warrantyDate !== "-" && warrantyDate.length > 5;
+
+      return {
+        ...computer,
+        // ปรับชื่อ Field ให้เข้ากับ ComputerCard component
+        name: computer.device_name || "Unknown Device",
+        serialNumber: computer.serial_number,
+        department: computer.user_name || computer.notes || "-",
+        warrantyStatus: isDateValid ? getWarrantyStatus(warrantyDate) : "expired",
+        daysUntilExpiry: isDateValid ? getDaysUntilExpiry(warrantyDate) : 0,
+      };
+    });
+  }, [computersData]);
+
+  // ค้นหาข้อมูล
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     
@@ -24,13 +43,15 @@ export default function SearchPage() {
     return computersWithWarranty.filter(
       (computer) =>
         computer.name.toLowerCase().includes(query) ||
-        computer.serialNumber.toLowerCase().includes(query)
+        (computer.serialNumber || "").toLowerCase().includes(query)
     );
   }, [searchQuery, computersWithWarranty]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    setHasSearched(true);
+    if (searchQuery.trim()) {
+      setHasSearched(true);
+    }
   };
 
   return (
@@ -68,16 +89,32 @@ export default function SearchPage() {
                   className="pl-10 h-12 text-lg"
                 />
               </div>
-              <Button type="submit" size="lg" className="h-12 px-8">
-                <Search className="h-5 w-5 mr-2" />
+              <Button type="submit" size="lg" className="h-12 px-8" disabled={isLoading}>
+                {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5 mr-2" />}
                 ค้นหา
               </Button>
             </form>
           </CardContent>
         </Card>
 
+        {/* Loading / Error States */}
+        {isLoading && hasSearched && (
+          <div className="text-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-4" />
+            <p className="text-muted-foreground">กำลังค้นหาข้อมูล...</p>
+          </div>
+        )}
+
+        {error && (
+          <div className="max-w-2xl mx-auto text-center py-12 text-destructive">
+            <XCircle className="h-12 w-12 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold">เกิดข้อผิดพลาดในการดึงข้อมูล</h3>
+            <p>{(error as Error).message}</p>
+          </div>
+        )}
+
         {/* Search Results */}
-        {hasSearched && (
+        {hasSearched && !isLoading && !error && (
           <div className="max-w-2xl mx-auto">
             {searchResults.length > 0 ? (
               <div className="space-y-4">
@@ -111,8 +148,8 @@ export default function SearchPage() {
               <CardContent className="pt-6">
                 <h3 className="font-semibold mb-3 text-foreground">💡 ตัวอย่างการค้นหา</h3>
                 <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li>• ค้นหาด้วยชื่อคอม: <span className="font-mono bg-background px-2 py-1 rounded">PC-SALES-001</span></li>
-                  <li>• ค้นหาด้วยซีเรียล: <span className="font-mono bg-background px-2 py-1 rounded">DELL-XPS15-2024</span></li>
+                  <li>• ค้นหาด้วยชื่อคอม: <span className="font-mono bg-background px-2 py-1 rounded">PC-IT-01</span></li>
+                  <li>• ค้นหาด้วยซีเรียล: <span className="font-mono bg-background px-2 py-1 rounded">DELL-12345</span></li>
                 </ul>
               </CardContent>
             </Card>

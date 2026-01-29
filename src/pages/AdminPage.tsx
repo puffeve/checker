@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Header } from "@/components/Header";
 import { WarrantyBadge } from "@/components/WarrantyBadge";
-import { StatusBadge } from "@/components/StatusBadge";
 import { AdminLogin } from "@/components/AdminLogin";
 import { EditComputerDialog } from "@/components/EditComputerDialog";
 import { AddComputerDialog } from "@/components/AddComputerDialog";
@@ -44,7 +43,6 @@ import {
   Loader2,
   Trash2,
 } from "lucide-react";
-import { ComputerStatus } from "@/types/computer";
 
 export default function AdminPage() {
   const navigate = useNavigate();
@@ -55,36 +53,82 @@ export default function AdminPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("ทั้งหมด");
   const [warrantyFilter, setWarrantyFilter] = useState("all");
+main
+
   
   // Selection state
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+main
   
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [selectedComputer, setSelectedComputer] = useState<{
-    id: string;
-    name: string;
-    serial_number: string;
-    department: string;
-    status: string;
-    registration_date: string;
-    warranty_end_date: string;
-  } | null>(null);
+  const [selectedComputer, setSelectedComputer] = useState<any | null>(null);
 
   const handleLogout = () => {
     logout();
     navigate("/");
   };
 
+main
+  const handleEdit = (computer: any) => {
+    setSelectedComputer({
+        id: computer.id,
+        device_name: computer.device_name,
+        serial_number: computer.serial_number,
+        user_name: computer.user_name || computer.notes,
+        status: computer.status,
+        warranty_expiry: computer.warranty_expiry,
+        notes: computer.notes
+    });
+
   const handleEdit = (computer: typeof selectedComputer) => {
     setSelectedComputer(computer);
+main
     setEditDialogOpen(true);
   };
 
   const handleEditSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ["computers"] });
   };
+
+ main
+  // 1. แปลงข้อมูลและคำนวณสถานะประกัน
+  const computersWithWarranty = useMemo(() => {
+    if (!computersData) return [];
+    
+    return computersData.map((computer) => {
+      try {
+        const warrantyDate = computer.warranty_expiry; 
+        const isDateValid = warrantyDate && warrantyDate !== "-" && warrantyDate.length > 5;
+
+        return {
+          ...computer,
+          name: computer.device_name || "ไม่ระบุชื่อ", 
+          display_user: computer.user_name || computer.notes || "-", 
+          warrantyStatus: isDateValid ? getWarrantyStatus(warrantyDate) : "expired",
+          daysUntilExpiry: isDateValid ? getDaysUntilExpiry(warrantyDate) : 0,
+        };
+      } catch (err) {
+        return {
+          ...computer,
+          name: "Error",
+          display_user: "-",
+          warrantyStatus: "expired",
+          daysUntilExpiry: 0,
+        };
+      }
+    });
+  }, [computersData]);
+
+  // 2. สร้างรายการตัวกรองแผนก/ผู้ใช้งาน
+  const uniqueDepartments = useMemo(() => {
+    if (!computersWithWarranty) return [];
+    const depts = new Set(computersWithWarranty.map(c => c.display_user).filter(d => d && d !== "-"));
+    return Array.from(depts).sort();
+  }, [computersWithWarranty]);
+
+  // 3. กรองข้อมูล (ตัด Status Filter ออก)
 
   const handleDeleteSuccess = () => {
     setSelectedIds([]);
@@ -117,18 +161,25 @@ export default function AdminPage() {
     }));
   }, [computersData]);
 
+main
   const filteredComputers = useMemo(() => {
     return computersWithWarranty.filter((computer) => {
       // Search filter
       const query = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !query ||
+main
+        (computer.name || "").toLowerCase().includes(query) ||
+        (computer.serial_number || "").toLowerCase().includes(query) ||
+        (computer.display_user || "").toLowerCase().includes(query);
+
         computer.name.toLowerCase().includes(query) ||
         computer.serial_number.toLowerCase().includes(query);
+main
 
       // Department filter
       const matchesDepartment =
-        departmentFilter === "ทั้งหมด" || computer.department === departmentFilter;
+        departmentFilter === "ทั้งหมด" || computer.display_user === departmentFilter;
 
       // Warranty filter
       const matchesWarranty =
@@ -138,9 +189,13 @@ export default function AdminPage() {
     });
   }, [computersWithWarranty, searchQuery, departmentFilter, warrantyFilter]);
 
-  // Dashboard stats
   const stats = useMemo(() => {
     const total = computersWithWarranty.length;
+main
+    const nearExpiry = computersWithWarranty.filter(c => c.warrantyStatus === "warning").length;
+    const expired = computersWithWarranty.filter(c => c.warrantyStatus === "expired").length;
+    const valid = total - expired;
+
     const active = computersWithWarranty.filter((c) => c.status === "active").length;
     const nearExpiry = computersWithWarranty.filter(
       (c) => c.warrantyStatus === "warning"
@@ -148,8 +203,9 @@ export default function AdminPage() {
     const expired = computersWithWarranty.filter(
       (c) => c.warrantyStatus === "expired"
     ).length;
+main
 
-    return { total, active, nearExpiry, expired };
+    return { total, valid, nearExpiry, expired };
   }, [computersWithWarranty]);
 
   // Show login screen if not authenticated
@@ -163,6 +219,12 @@ export default function AdminPage() {
 
       <main className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
+main
+          <h2 className="text-2xl font-bold text-foreground">แดชบอร์ดผู้ดูแลระบบ</h2>
+          <Button variant="outline" size="sm" onClick={handleLogout} className="gap-2">
+            <LogOut className="h-4 w-4" /> ออกจากระบบ
+          </Button>
+
           <h2 className="text-2xl font-bold text-foreground">
             แดชบอร์ดผู้ดูแลระบบ
           </h2>
@@ -173,6 +235,7 @@ export default function AdminPage() {
               ออกจากระบบ
             </Button>
           </div>
+main
         </div>
 
         {/* Dashboard Stats */}
@@ -193,6 +256,13 @@ export default function AdminPage() {
 
           <Card>
             <CardHeader className="pb-2">
+main
+              <CardTitle className="text-sm font-medium text-muted-foreground">อยู่ในประกัน</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <Monitor className="h-5 w-5 text-green-500" />
+
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 ใช้งาน
               </CardTitle>
@@ -203,11 +273,16 @@ export default function AdminPage() {
                 <span className="text-2xl font-bold text-warranty-valid">
                   {stats.active}
                 </span>
+main
               </div>
             </CardContent>
           </Card>
 
+main
+          <Card className="border-orange-200">
+
           <Card className="border-warranty-warning">
+main
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 ใกล้หมดประกัน
@@ -215,15 +290,20 @@ export default function AdminPage() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
+main
+                <AlertTriangle className="h-5 w-5 text-orange-500" />
+                <span className="text-2xl font-bold text-orange-500">{stats.nearExpiry}</span>
+
                 <AlertTriangle className="h-5 w-5 text-warranty-warning" />
                 <span className="text-2xl font-bold text-warranty-warning">
                   {stats.nearExpiry}
                 </span>
+main
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-warranty-expired">
+          <Card className="border-red-200">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 หมดประกัน
@@ -231,10 +311,15 @@ export default function AdminPage() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
+main
+                <XCircle className="h-5 w-5 text-red-500" />
+                <span className="text-2xl font-bold text-red-500">{stats.expired}</span>
+
                 <XCircle className="h-5 w-5 text-warranty-expired" />
                 <span className="text-2xl font-bold text-warranty-expired">
                   {stats.expired}
                 </span>
+main
               </div>
             </CardContent>
           </Card>
@@ -244,8 +329,7 @@ export default function AdminPage() {
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
-              <Filter className="h-5 w-5" />
-              ตัวกรองข้อมูล
+              <Filter className="h-5 w-5" /> ตัวกรองข้อมูล
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -262,6 +346,14 @@ export default function AdminPage() {
 
               <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
                 <SelectTrigger>
+main
+                  <SelectValue placeholder="กรองตามผู้ใช้งาน" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ทั้งหมด">ผู้ใช้งานทั้งหมด</SelectItem>
+                  {uniqueDepartments.map((dept) => (
+                    <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+
                   <SelectValue placeholder="แผนก" />
                 </SelectTrigger>
                 <SelectContent>
@@ -269,6 +361,7 @@ export default function AdminPage() {
                     <SelectItem key={dept} value={dept}>
                       {dept}
                     </SelectItem>
+main
                   ))}
                 </SelectContent>
               </Select>
@@ -288,7 +381,7 @@ export default function AdminPage() {
           </CardContent>
         </Card>
 
-        {/* Computer Table */}
+        {/* Table */}
         <Card>
           <CardHeader>
             <CardTitle className="text-lg flex items-center justify-between">
@@ -307,12 +400,15 @@ export default function AdminPage() {
                 )}
               </div>
               <span className="text-sm font-normal text-muted-foreground">
-                แสดง {filteredComputers.length} จาก {computersWithWarranty.length} รายการ
+                แสดง {filteredComputers.length} รายการ
               </span>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             {isLoading ? (
+main
+              <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin mr-2" /> กำลังโหลด...</div>
+
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 <span className="ml-2 text-muted-foreground">กำลังโหลดข้อมูล...</span>
@@ -322,6 +418,7 @@ export default function AdminPage() {
                 <XCircle className="h-5 w-5 mr-2" />
                 เกิดข้อผิดพลาดในการโหลดข้อมูล
               </div>
+main
             ) : (
               <div className="overflow-x-auto">
                 <Table>
@@ -338,17 +435,27 @@ export default function AdminPage() {
                       </TableHead>
                       <TableHead className="w-12">#</TableHead>
                       <TableHead>ชื่อคอม</TableHead>
+main
+                      <TableHead>ซีเรียลนัมเบอร์</TableHead>
+                      <TableHead>ผู้ใช้งาน / หมายเหตุ</TableHead>
+
                       <TableHead className="hidden md:table-cell">ซีเรียลนัมเบอร์</TableHead>
                       <TableHead className="hidden sm:table-cell">แผนก</TableHead>
                       <TableHead className="hidden lg:table-cell">วันหมดประกัน</TableHead>
+main
                       <TableHead>สถานะประกัน</TableHead>
-                      <TableHead>สถานะเครื่อง</TableHead>
                       <TableHead className="w-20">จัดการ</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredComputers.map((computer, index) => (
                       <TableRow key={computer.id}>
+main
+                        <TableCell>{index + 1}</TableCell>
+                        <TableCell className="font-medium">{computer.name}</TableCell>
+                        <TableCell className="font-mono text-sm">{computer.serial_number}</TableCell>
+                        <TableCell className="text-sm">{computer.display_user}</TableCell>
+
                         <TableCell>
                           <Checkbox
                             checked={selectedIds.includes(computer.id)}
@@ -370,23 +477,16 @@ export default function AdminPage() {
                             locale: th,
                           })}
                         </TableCell>
+main
                         <TableCell>
                           <WarrantyBadge
-                            status={computer.warrantyStatus}
+                            status={computer.warrantyStatus as any}
                             daysUntilExpiry={computer.daysUntilExpiry}
                             showDays={false}
                           />
                         </TableCell>
                         <TableCell>
-                          <StatusBadge status={computer.status as ComputerStatus} />
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(computer)}
-                            title="แก้ไข"
-                          >
+                          <Button variant="ghost" size="icon" onClick={() => handleEdit(computer)}>
                             <Pencil className="h-4 w-4" />
                           </Button>
                         </TableCell>
@@ -400,7 +500,6 @@ export default function AdminPage() {
         </Card>
       </main>
 
-      {/* Edit Dialog */}
       <EditComputerDialog
         computer={selectedComputer}
         open={editDialogOpen}
