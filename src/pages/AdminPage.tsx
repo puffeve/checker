@@ -86,11 +86,8 @@ export default function AdminPage() {
       .select("*")
       .order("id", { ascending: true });
 
-    if (error) {
-      setError(error.message);
-    } else {
-      setComputers(data || []);
-    }
+    if (error) setError(error.message);
+    else setComputers(data || []);
 
     setLoading(false);
   };
@@ -101,32 +98,70 @@ export default function AdminPage() {
 
   /* ===== Map + Warranty ===== */
   const computersWithWarranty = useMemo(() => {
-    return computers.map((c) => {
+  return computers
+    .map((c) => {
       const daysUntilExpiry = getDaysUntilExpiry(c.warranty_expiry);
       const warrantyStatus = getWarrantyStatus(c.warranty_expiry);
 
+      const name = c.device_name || "-";
+      const department = c.notes || c.user_name || "-";
+
+      // ❌ ไม่มีชื่อคอมเลย
+      const hasNoName =
+        !c.device_name || c.device_name === "-" || c.device_name.trim() === "";
+
+      // ⚠️ มีชื่อคอม แต่ช่องอื่นมี "-"
+      const hasOtherMissingData = !hasNoName &&
+        [
+          c.serial_number,
+          department,
+          c.warranty_expiry,
+        ].some(
+          (v) =>
+            v === "-" ||
+            v === null ||
+            v === undefined ||
+            String(v).trim() === ""
+        );
+
       return {
         ...c,
-        name: c.device_name || "-",
-        department: c.notes || c.user_name || "-",
+        name,
+        department,
         daysUntilExpiry,
         warrantyStatus,
+        hasNoName,
+        hasOtherMissingData,
       };
+    })
+    .sort((a, b) => {
+      // 🥇 มีชื่อ + ข้อมูลครบ
+      if (!a.hasNoName && !a.hasOtherMissingData &&
+          (b.hasNoName || b.hasOtherMissingData)) return -1;
+
+      if (!b.hasNoName && !b.hasOtherMissingData &&
+          (a.hasNoName || a.hasOtherMissingData)) return 1;
+
+      // 🥈 มีชื่อ แต่ข้อมูลไม่ครบ
+      if (!a.hasNoName && a.hasOtherMissingData && b.hasNoName) return -1;
+      if (!b.hasNoName && b.hasOtherMissingData && a.hasNoName) return 1;
+
+      // 🥉 ไม่มีชื่อ → ล่างสุด
+      return 0;
     });
-  }, [computers]);
+}, [computers]);
+
+
 
   /* ===== Stats ===== */
   const stats = useMemo(() => {
     const total = computersWithWarranty.length;
-
     const active = computersWithWarranty.filter(
       (c) => c.warrantyStatus !== "expired"
     ).length;
-
     const warning = computersWithWarranty.filter(
       (c) => c.warrantyStatus === "warning"
     ).length;
-
     const expired = computersWithWarranty.filter(
       (c) => c.warrantyStatus === "expired"
     ).length;
@@ -139,11 +174,26 @@ export default function AdminPage() {
     return Array.from(
       new Set(
         computersWithWarranty
-          .map((c) => c.department)
-          .filter((d) => d && d !== "-")
+          .map((c) => c.name)
+          .filter((n) => n && n !== "-")
       )
     );
   }, [computersWithWarranty]);
+
+  /* ===== 🔍 Search Suggestions (≤ 5) ===== */
+  const searchSuggestions = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+
+    const q = searchQuery.toLowerCase();
+
+    return Array.from(
+      new Set(
+        computersWithWarranty
+          .map((c) => c.name)
+          .filter((name) => name.toLowerCase().startsWith(q))
+      )
+    ).slice(0, 5);
+  }, [searchQuery, computersWithWarranty]);
 
   const filteredComputers = useMemo(() => {
     return computersWithWarranty.filter((c) => {
@@ -156,7 +206,7 @@ export default function AdminPage() {
 
       const matchDept =
         departmentFilter === "ทั้งหมด" ||
-        c.department === departmentFilter;
+        c.name === departmentFilter;
 
       const matchWarranty =
         warrantyFilter === "all" ||
@@ -262,6 +312,7 @@ export default function AdminPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Search */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -270,6 +321,21 @@ export default function AdminPage() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-9"
                 />
+
+                {searchSuggestions.length > 0 && (
+                  <div className="absolute z-10 mt-1 w-full rounded-md border bg-background shadow">
+                    {searchSuggestions.map((name) => (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => setSearchQuery(name)}
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                      >
+                        {name}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <Select
@@ -319,17 +385,19 @@ export default function AdminPage() {
                   {computersWithWarranty.length} รายการ
                 </span>
 
-                {selectedIds.length > 0 && (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={handleDeleteSelected}
-                    className="gap-2"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    ลบ ({selectedIds.length})
-                  </Button>
-                )}
+                <Button
+                  size="sm"
+                  onClick={handleDeleteSelected}
+                  disabled={selectedIds.length === 0}
+                  className={
+                    selectedIds.length === 0
+                      ? "bg-muted text-muted-foreground cursor-not-allowed gap-2"
+                      : "bg-red-500 hover:bg-red-600 text-white gap-2"
+                  }
+                >
+                  <Trash2 className="h-4 w-4" />
+                  ลบ ({selectedIds.length})
+                </Button>
               </div>
             </div>
           </CardHeader>

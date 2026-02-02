@@ -63,7 +63,7 @@ export default function SearchPage() {
     });
   }, [computers]);
 
-  // ผลลัพธ์ค้นหา
+  // ผลลัพธ์ค้นหา (หลังจากกดค้นหา) ❗ยังใช้ includes
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
 
@@ -75,7 +75,7 @@ export default function SearchPage() {
     );
   }, [searchQuery, computersWithWarranty]);
 
-  // suggestions ระหว่างพิมพ์
+  // 🔍 suggestions ระหว่างพิมพ์ (ขึ้นต้นตัวอักษรเดียวกันเท่านั้น)
   const liveSuggestions = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     if (!q) return [];
@@ -83,8 +83,8 @@ export default function SearchPage() {
     return computersWithWarranty
       .filter(
         (c) =>
-          c.name.toLowerCase().includes(q) ||
-          (c.serialNumber || "").toLowerCase().includes(q)
+          c.name.toLowerCase().startsWith(q) ||
+          (c.serialNumber || "").toLowerCase().startsWith(q)
       )
       .slice(0, 5);
   }, [searchQuery, computersWithWarranty]);
