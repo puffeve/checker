@@ -1,10 +1,14 @@
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+
+/* ===== Components ===== */
 import { Header } from "@/components/Header";
 import { AdminLogin } from "@/components/AdminLogin";
 import { AddComputerDialog } from "@/components/AddComputerDialog";
 import { EditComputerDialog } from "@/components/EditComputerDialog";
 import { WarrantyBadge } from "@/components/WarrantyBadge";
+
+/* ===== UI ===== */
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -24,6 +28,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+
+/* ===== Icons ===== */
 import {
   Monitor,
   CheckCircle,
@@ -35,6 +41,8 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react";
+
+/* ===== Utils & Hooks ===== */
 import { supabase } from "../lib/supabaseClient";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import {
@@ -46,6 +54,7 @@ export default function AdminPage() {
   const navigate = useNavigate();
   const { isAuthenticated, login, logout } = useAdminAuth();
 
+  /* ===== State ===== */
   const [computers, setComputers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +67,7 @@ export default function AdminPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [selectedComputer, setSelectedComputer] = useState<any | null>(null);
 
+  /* ===== Auth ===== */
   if (!isAuthenticated) {
     return <AdminLogin onLogin={login} />;
   }
@@ -67,15 +77,21 @@ export default function AdminPage() {
     navigate("/");
   };
 
+  /* ===== Fetch Data ===== */
   const fetchComputers = async () => {
     setLoading(true);
+
     const { data, error } = await supabase
       .from("computers")
       .select("*")
       .order("id", { ascending: true });
 
-    if (error) setError(error.message);
-    else setComputers(data || []);
+    if (error) {
+      setError(error.message);
+    } else {
+      setComputers(data || []);
+    }
+
     setLoading(false);
   };
 
@@ -83,7 +99,7 @@ export default function AdminPage() {
     fetchComputers();
   }, []);
 
-  // ===== map + warranty =====
+  /* ===== Map + Warranty ===== */
   const computersWithWarranty = useMemo(() => {
     return computers.map((c) => {
       const daysUntilExpiry = getDaysUntilExpiry(c.warranty_expiry);
@@ -99,7 +115,7 @@ export default function AdminPage() {
     });
   }, [computers]);
 
-  // ===== stats =====
+  /* ===== Stats ===== */
   const stats = useMemo(() => {
     const total = computersWithWarranty.length;
 
@@ -118,6 +134,7 @@ export default function AdminPage() {
     return { total, active, warning, expired };
   }, [computersWithWarranty]);
 
+  /* ===== Filters ===== */
   const departments = useMemo(() => {
     return Array.from(
       new Set(
@@ -149,6 +166,7 @@ export default function AdminPage() {
     });
   }, [computersWithWarranty, searchQuery, departmentFilter, warrantyFilter]);
 
+  /* ===== Bulk Delete ===== */
   const handleDeleteSelected = async () => {
     if (selectedIds.length === 0) return;
 
@@ -167,6 +185,7 @@ export default function AdminPage() {
     filteredComputers.length > 0 &&
     filteredComputers.every((c) => selectedIds.includes(c.id));
 
+  /* ===== Render ===== */
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -175,6 +194,7 @@ export default function AdminPage() {
         {/* ===== Header ===== */}
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold">แดชบอร์ดผู้ดูแลระบบ</h1>
+
           <div className="flex items-center gap-2">
             <AddComputerDialog onSuccess={fetchComputers} />
             <Button variant="outline" size="sm" onClick={handleLogout}>
@@ -232,6 +252,60 @@ export default function AdminPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* ===== Filters ===== */}
+        <Card className="mb-6">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 mb-4 font-semibold">
+              <Filter className="h-4 w-4" />
+              ตัวกรองข้อมูล
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="ค้นหาชื่อคอม / ซีเรียล..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+
+              <Select
+                value={departmentFilter}
+                onValueChange={setDepartmentFilter}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="ทั้งหมด" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ทั้งหมด">ทั้งหมด</SelectItem>
+                  {departments.map((d) => (
+                    <SelectItem key={d} value={d}>
+                      {d}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={warrantyFilter}
+                onValueChange={setWarrantyFilter}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="ประกันทั้งหมด" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">ประกันทั้งหมด</SelectItem>
+                  <SelectItem value="valid">อยู่ในประกัน</SelectItem>
+                  <SelectItem value="warning">ใกล้หมดประกัน</SelectItem>
+                  <SelectItem value="expired">หมดประกัน</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* ===== Table ===== */}
         <Card>
