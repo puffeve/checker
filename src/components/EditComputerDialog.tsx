@@ -150,162 +150,169 @@ export function EditComputerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>แก้ไขข้อมูลคอมพิวเตอร์</DialogTitle>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-[480px]">
+  <DialogHeader>
+    <DialogTitle>แก้ไขข้อมูลคอมพิวเตอร์</DialogTitle>
+  </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="device_name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>ชื่ออุปกรณ์</FormLabel>
-                  <FormControl>
-                    <Input placeholder="เช่น PC-IT-01" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+  <Form {...form}>
+    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-1">
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="serial_number"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>ซีเรียลนัมเบอร์</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="model"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>รุ่น/โมเดล</FormLabel>
-                    <FormControl>
-                      <Input placeholder="เช่น HP ProBook" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+      {/* ชื่ออุปกรณ์ */}
+      <FormField
+        control={form.control}
+        name="device_name"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>ชื่ออุปกรณ์</FormLabel>
+            <FormControl>
+              <Input className="h-10" {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
 
-            <FormField
-              control={form.control}
-              name="user_name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>ชื่อผู้ใช้งาน / แผนก</FormLabel>
-                  <FormControl>
-                    <Input placeholder="ระบุชื่อผู้ถือครอง" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+      {/* ซีเรียล */}
+      <FormField
+        control={form.control}
+        name="serial_number"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>ซีเรียลนัมเบอร์</FormLabel>
+            <FormControl>
+              <Input {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>สถานะ</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="เลือกสถานะ" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {statuses.map((s) => (
-                          <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+      {/* รุ่น / โมเดล */}
+      <FormField
+        control={form.control}
+        name="model"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>รุ่น / โมเดล</FormLabel>
+            <FormControl>
+              <Input {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
 
-              <FormField
-                control={form.control}
-                name="warranty_expiry"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>วันหมดประกัน</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
-                          >
-                            {field.value ? (
-                              format(field.value, "d MMM yyyy", { locale: th })
-                            ) : (
-                              <span>เลือกวันที่</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+      {/* ผู้ใช้งาน */}
+      <FormField
+        control={form.control}
+        name="user_name"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>ชื่อผู้ใช้งาน / แผนก</FormLabel>
+            <FormControl>
+              <Input {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
 
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>หมายเหตุ</FormLabel>
-                  <FormControl>
-                    <Input placeholder="รายละเอียดเพิ่มเติม..." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+      {/* สถานะ */}
+      <FormField
+        control={form.control}
+        name="status"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>สถานะ</FormLabel>
+            <Select value={field.value} onValueChange={field.onChange}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {statuses.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
 
-            <DialogFooter className="pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={isLoading}
-              >
-                ยกเลิก
-              </Button>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                บันทึกการแก้ไข
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
+      {/* วันหมดประกัน */}
+      <FormField
+        control={form.control}
+        name="warranty_expiry"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>วันหมดประกัน</FormLabel>
+            <Popover>
+              <PopoverTrigger asChild>
+                <FormControl>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-between"
+                  >
+                    {field.value
+                      ? format(field.value, "d MMM yyyy", { locale: th })
+                      : "เลือกวันที่"}
+                    <CalendarIcon className="h-4 w-4 opacity-50" />
+                  </Button>
+                </FormControl>
+              </PopoverTrigger>
+              <PopoverContent className="p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={field.value}
+                  onSelect={field.onChange}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      {/* หมายเหตุ */}
+      <FormField
+        control={form.control}
+        name="notes"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>หมายเหตุ</FormLabel>
+            <FormControl>
+              <Input {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      {/* ปุ่ม */}
+      <DialogFooter className="pt-3 border-t">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => onOpenChange(false)}
+          disabled={isLoading}
+        >
+          ยกเลิก
+        </Button>
+        <Button type="submit" disabled={isLoading}>
+          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          บันทึกการแก้ไข
+        </Button>
+      </DialogFooter>
+
+    </form>
+  </Form>
+</DialogContent>
     </Dialog>
   );
 }

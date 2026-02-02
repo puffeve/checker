@@ -1,158 +1,205 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Header } from "@/components/Header";
 import { ComputerCard } from "@/components/ComputerCard";
-import { useComputers } from "@/hooks/useComputers";
 import { getWarrantyStatus, getDaysUntilExpiry } from "@/utils/warrantyUtils";
 import { Search, Monitor, Loader2, XCircle } from "lucide-react";
+
+// ใช้ relative path
+import { supabase } from "../lib/supabaseClient";
 
 export default function SearchPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
 
-  // ดึงข้อมูลจริงจาก Supabase
-  const { data: computersData, isLoading, error } = useComputers();
+  const [computers, setComputers] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // แปลงข้อมูลและคำนวณประกัน
+  // โหลดข้อมูลจาก Supabase
+  useEffect(() => {
+    const fetchComputers = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      const { data, error } = await supabase
+        .from("computers")
+        .select("*")
+        .eq("status", "active");
+
+      if (error) {
+        setError(error.message);
+      } else {
+        setComputers(data || []);
+      }
+
+      setIsLoading(false);
+    };
+
+    fetchComputers();
+  }, []);
+
+  // แปลงข้อมูลให้เข้ากับ ComputerCard
   const computersWithWarranty = useMemo(() => {
-    if (!computersData) return [];
-    
-    return computersData.map((computer) => {
+    return computers.map((computer) => {
       const warrantyDate = computer.warranty_expiry;
-      const isDateValid = warrantyDate && warrantyDate !== "-" && warrantyDate.length > 5;
+      const isDateValid =
+        warrantyDate && warrantyDate !== "-" && warrantyDate.length > 5;
 
       return {
         ...computer,
-        // ปรับชื่อ Field ให้เข้ากับ ComputerCard component
-        name: computer.device_name || "Unknown Device",
+        name: computer.device_name || "ไม่ระบุชื่อ",
         serialNumber: computer.serial_number,
-        department: computer.user_name || computer.notes || "-",
-        warrantyStatus: isDateValid ? getWarrantyStatus(warrantyDate) : "expired",
-        daysUntilExpiry: isDateValid ? getDaysUntilExpiry(warrantyDate) : 0,
+        department: computer.notes || computer.user_name || "-",
+        warrantyStatus: isDateValid
+          ? getWarrantyStatus(warrantyDate)
+          : "expired",
+        daysUntilExpiry: isDateValid
+          ? getDaysUntilExpiry(warrantyDate)
+          : 0,
       };
     });
-  }, [computersData]);
+  }, [computers]);
 
-  // ค้นหาข้อมูล
+  // ผลลัพธ์ค้นหา
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
-    
-    const query = searchQuery.toLowerCase().trim();
+
+    const q = searchQuery.toLowerCase().trim();
     return computersWithWarranty.filter(
-      (computer) =>
-        computer.name.toLowerCase().includes(query) ||
-        (computer.serialNumber || "").toLowerCase().includes(query)
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.serialNumber || "").toLowerCase().includes(q)
     );
+  }, [searchQuery, computersWithWarranty]);
+
+  // suggestions ระหว่างพิมพ์
+  const liveSuggestions = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return [];
+
+    return computersWithWarranty
+      .filter(
+        (c) =>
+          c.name.toLowerCase().includes(q) ||
+          (c.serialNumber || "").toLowerCase().includes(q)
+      )
+      .slice(0, 5);
   }, [searchQuery, computersWithWarranty]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      setHasSearched(true);
-    }
+    if (!searchQuery.trim()) return;
+    setHasSearched(true);
   };
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      
+
       <main className="container mx-auto px-4 py-8">
-        {/* Hero Section */}
+        {/* Hero */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center bg-primary/10 p-4 rounded-full mb-4">
             <Monitor className="h-12 w-12 text-primary" />
           </div>
-          <h2 className="text-3xl font-bold text-foreground mb-2">
+          <h2 className="text-3xl font-bold mb-2">
             ค้นหาข้อมูลคอมพิวเตอร์
           </h2>
           <p className="text-muted-foreground max-w-md mx-auto">
-            กรอกชื่อคอมพิวเตอร์หรือซีเรียลนัมเบอร์เพื่อตรวจสอบสถานะประกัน
+            ค้นหาด้วยชื่อคอมพิวเตอร์ หรือ ซีเรียลนัมเบอร์
           </p>
         </div>
 
-        {/* Search Form */}
-        <Card className="max-w-2xl mx-auto mb-8 shadow-lg">
+        {/* Search */}
+        <Card className="max-w-2xl mx-auto mb-10 shadow-lg">
           <CardContent className="pt-6">
             <form onSubmit={handleSearch} className="flex gap-3">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+
                 <Input
-                  type="text"
-                  placeholder="ค้นหาด้วยชื่อคอม หรือ ซีเรียลนัมเบอร์..."
                   value={searchQuery}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
-                    if (!e.target.value.trim()) setHasSearched(false);
+                    setHasSearched(false);
                   }}
+                  placeholder="ค้นหาด้วยชื่อคอม หรือ ซีเรียลนัมเบอร์..."
                   className="pl-10 h-12 text-lg"
                 />
+
+                {/* Suggestions */}
+                {liveSuggestions.length > 0 && !hasSearched && (
+                  <div className="absolute z-50 mt-2 w-full rounded-md border bg-background shadow-lg">
+                    {liveSuggestions.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery(item.name);
+                          setHasSearched(true);
+                        }}
+                        className="w-full px-4 py-2 text-left hover:bg-muted transition"
+                      >
+                        <div className="font-medium">{item.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {item.serialNumber}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-              <Button type="submit" size="lg" className="h-12 px-8" disabled={isLoading}>
-                {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5 mr-2" />}
-                ค้นหา
+
+              <Button
+                type="submit"
+                size="lg"
+                className="h-12 px-8"
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <>
+                    <Search className="h-5 w-5 mr-2" />
+                    ค้นหา
+                  </>
+                )}
               </Button>
             </form>
           </CardContent>
         </Card>
 
-        {/* Loading / Error States */}
-        {isLoading && hasSearched && (
-          <div className="text-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-4" />
-            <p className="text-muted-foreground">กำลังค้นหาข้อมูล...</p>
-          </div>
-        )}
-
+        {/* Error */}
         {error && (
           <div className="max-w-2xl mx-auto text-center py-12 text-destructive">
             <XCircle className="h-12 w-12 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold">เกิดข้อผิดพลาดในการดึงข้อมูล</h3>
-            <p>{(error as Error).message}</p>
+            <p>{error}</p>
           </div>
         )}
 
-        {/* Search Results */}
+        {/* Results */}
         {hasSearched && !isLoading && !error && (
-          <div className="max-w-2xl mx-auto">
+          <div className="max-w-2xl mx-auto space-y-4">
+            <p className="text-sm text-muted-foreground">
+              พบ {searchResults.length} รายการ
+            </p>
+
             {searchResults.length > 0 ? (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  พบ {searchResults.length} รายการ
-                </p>
-                {searchResults.map((computer) => (
-                  <ComputerCard key={computer.id} computer={computer} />
-                ))}
-              </div>
+              searchResults.map((computer) => (
+                <ComputerCard key={computer.id} computer={computer} />
+              ))
             ) : (
-              <Card className="text-center py-12">
+              <Card className="text-center py-10">
                 <CardContent>
-                  <div className="inline-flex items-center justify-center bg-muted p-4 rounded-full mb-4">
-                    <Search className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                  <h3 className="text-lg font-semibold mb-2">ไม่พบข้อมูล</h3>
                   <p className="text-muted-foreground">
-                    ไม่พบคอมพิวเตอร์ที่ตรงกับ "{searchQuery}"
+                    ไม่พบข้อมูลที่ตรงกับ “{searchQuery}”
                   </p>
                 </CardContent>
               </Card>
             )}
-          </div>
-        )}
-
-        {/* Quick Tips */}
-        {!hasSearched && (
-          <div className="max-w-2xl mx-auto">
-            <Card className="bg-muted/50 border-dashed">
-              <CardContent className="pt-6">
-                <h3 className="font-semibold mb-3 text-foreground">💡 ตัวอย่างการค้นหา</h3>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li>• ค้นหาด้วยชื่อคอม: <span className="font-mono bg-background px-2 py-1 rounded">PC-IT-01</span></li>
-                  <li>• ค้นหาด้วยซีเรียล: <span className="font-mono bg-background px-2 py-1 rounded">DELL-12345</span></li>
-                </ul>
-              </CardContent>
-            </Card>
           </div>
         )}
       </main>

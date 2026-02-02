@@ -1,53 +1,42 @@
-import { Computer, ComputerWithWarranty, WarrantyStatus } from "@/types/computer";
-import { differenceInDays, parseISO } from "date-fns";
+import { differenceInCalendarDays, parse } from "date-fns";
 
-export function getWarrantyStatus(warrantyEndDate: string): WarrantyStatus {
-  const today = new Date();
-  const endDate = parseISO(warrantyEndDate);
-  const daysUntilExpiry = differenceInDays(endDate, today);
+export type WarrantyStatus = "valid" | "warning" | "expired";
 
-  if (daysUntilExpiry < 0) {
-    return "expired";
-  } else if (daysUntilExpiry <= 30) {
-    return "warning";
+function parseDate(dateStr?: string): Date | null {
+  if (!dateStr) return null;
+
+  const formats = [
+    "dd/MM/yyyy",
+    "dd-MM-yyyy",
+    "dd.MM.yyyy", // 👈 ตัวนี้แหละ ตัวการ
+    "yyyy-MM-dd",
+  ];
+
+  for (const f of formats) {
+    const d = parse(dateStr, f, new Date());
+    if (!isNaN(d.getTime())) return d;
   }
+
+  return null;
+}
+
+
+export function getDaysUntilExpiry(
+  warrantyExpiry?: string
+): number {
+  const expiry = parseDate(warrantyExpiry);
+  if (!expiry) return -1;
+
+  const today = new Date();
+  return differenceInCalendarDays(expiry, today);
+}
+
+export function getWarrantyStatus(
+  warrantyExpiry?: string
+): WarrantyStatus {
+  const days = getDaysUntilExpiry(warrantyExpiry);
+
+  if (days < 0) return "expired";
+  if (days <= 30) return "warning";
   return "valid";
-}
-
-export function getDaysUntilExpiry(warrantyEndDate: string): number {
-  const today = new Date();
-  const endDate = parseISO(warrantyEndDate);
-  return differenceInDays(endDate, today);
-}
-
-export function enrichComputerWithWarranty(computer: Computer): ComputerWithWarranty {
-  return {
-    ...computer,
-    warrantyStatus: getWarrantyStatus(computer.warrantyEndDate),
-    daysUntilExpiry: getDaysUntilExpiry(computer.warrantyEndDate),
-  };
-}
-
-export function getWarrantyStatusText(status: WarrantyStatus): string {
-  switch (status) {
-    case "valid":
-      return "อยู่ในประกัน";
-    case "warning":
-      return "ใกล้หมดประกัน";
-    case "expired":
-      return "หมดประกัน";
-  }
-}
-
-export function getComputerStatusText(status: string): string {
-  switch (status) {
-    case "active":
-      return "ใช้งาน";
-    case "repair":
-      return "ซ่อม";
-    case "retired":
-      return "ปลดระวาง";
-    default:
-      return status;
-  }
 }

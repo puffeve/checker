@@ -1,20 +1,21 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Header } from "@/components/Header";
-import { WarrantyBadge } from "@/components/WarrantyBadge";
 import { AdminLogin } from "@/components/AdminLogin";
-import { EditComputerDialog } from "@/components/EditComputerDialog";
 import { AddComputerDialog } from "@/components/AddComputerDialog";
-import { DeleteComputerDialog } from "@/components/DeleteComputerDialog";
-import { useAdminAuth } from "@/hooks/useAdminAuth";
-import { useComputers } from "@/hooks/useComputers";
-import { departments } from "@/data/mockComputers";
-import { getWarrantyStatus, getDaysUntilExpiry } from "@/utils/warrantyUtils";
+import { EditComputerDialog } from "@/components/EditComputerDialog";
+import { WarrantyBadge } from "@/components/WarrantyBadge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -24,315 +25,223 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { format, parseISO } from "date-fns";
-import { th } from "date-fns/locale";
-import {
   Monitor,
+  CheckCircle,
   AlertTriangle,
   XCircle,
-  Search,
-  Filter,
   LogOut,
-  Pencil,
   Loader2,
+  Filter,
+  Search,
+  Pencil,
   Trash2,
 } from "lucide-react";
+import { supabase } from "../lib/supabaseClient";
+import { useAdminAuth } from "@/hooks/useAdminAuth";
+import {
+  getWarrantyStatus,
+  getDaysUntilExpiry,
+} from "@/utils/warrantyUtils";
 
 export default function AdminPage() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { isAuthenticated, login, logout } = useAdminAuth();
-  const { data: computersData, isLoading, error } = useComputers();
-  
+
+  const [computers, setComputers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("ทั้งหมด");
   const [warrantyFilter, setWarrantyFilter] = useState("all");
-main
 
-  
-  // Selection state
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-main
-  
-  // Edit dialog state
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [selectedComputer, setSelectedComputer] = useState<any | null>(null);
+
+  if (!isAuthenticated) {
+    return <AdminLogin onLogin={login} />;
+  }
 
   const handleLogout = () => {
     logout();
     navigate("/");
   };
 
-main
-  const handleEdit = (computer: any) => {
-    setSelectedComputer({
-        id: computer.id,
-        device_name: computer.device_name,
-        serial_number: computer.serial_number,
-        user_name: computer.user_name || computer.notes,
-        status: computer.status,
-        warranty_expiry: computer.warranty_expiry,
-        notes: computer.notes
-    });
+  const fetchComputers = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("computers")
+      .select("*")
+      .order("id", { ascending: true });
 
-  const handleEdit = (computer: typeof selectedComputer) => {
-    setSelectedComputer(computer);
-main
-    setEditDialogOpen(true);
+    if (error) setError(error.message);
+    else setComputers(data || []);
+    setLoading(false);
   };
 
-  const handleEditSuccess = () => {
-    queryClient.invalidateQueries({ queryKey: ["computers"] });
-  };
+  useEffect(() => {
+    fetchComputers();
+  }, []);
 
- main
-  // 1. แปลงข้อมูลและคำนวณสถานะประกัน
+  // ===== map + warranty =====
   const computersWithWarranty = useMemo(() => {
-    if (!computersData) return [];
-    
-    return computersData.map((computer) => {
-      try {
-        const warrantyDate = computer.warranty_expiry; 
-        const isDateValid = warrantyDate && warrantyDate !== "-" && warrantyDate.length > 5;
+    return computers.map((c) => {
+      const daysUntilExpiry = getDaysUntilExpiry(c.warranty_expiry);
+      const warrantyStatus = getWarrantyStatus(c.warranty_expiry);
 
-        return {
-          ...computer,
-          name: computer.device_name || "ไม่ระบุชื่อ", 
-          display_user: computer.user_name || computer.notes || "-", 
-          warrantyStatus: isDateValid ? getWarrantyStatus(warrantyDate) : "expired",
-          daysUntilExpiry: isDateValid ? getDaysUntilExpiry(warrantyDate) : 0,
-        };
-      } catch (err) {
-        return {
-          ...computer,
-          name: "Error",
-          display_user: "-",
-          warrantyStatus: "expired",
-          daysUntilExpiry: 0,
-        };
-      }
+      return {
+        ...c,
+        name: c.device_name || "-",
+        department: c.notes || c.user_name || "-",
+        daysUntilExpiry,
+        warrantyStatus,
+      };
     });
-  }, [computersData]);
+  }, [computers]);
 
-  // 2. สร้างรายการตัวกรองแผนก/ผู้ใช้งาน
-  const uniqueDepartments = useMemo(() => {
-    if (!computersWithWarranty) return [];
-    const depts = new Set(computersWithWarranty.map(c => c.display_user).filter(d => d && d !== "-"));
-    return Array.from(depts).sort();
-  }, [computersWithWarranty]);
-
-  // 3. กรองข้อมูล (ตัด Status Filter ออก)
-
-  const handleDeleteSuccess = () => {
-    setSelectedIds([]);
-    queryClient.invalidateQueries({ queryKey: ["computers"] });
-  };
-
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedIds(filteredComputers.map((c) => c.id));
-    } else {
-      setSelectedIds([]);
-    }
-  };
-
-  const handleSelectOne = (id: string, checked: boolean) => {
-    if (checked) {
-      setSelectedIds((prev) => [...prev, id]);
-    } else {
-      setSelectedIds((prev) => prev.filter((prevId) => prevId !== id));
-    }
-  };
-
-  // Transform database data to include warranty info
-  const computersWithWarranty = useMemo(() => {
-    if (!computersData) return [];
-    return computersData.map((computer) => ({
-      ...computer,
-      warrantyStatus: getWarrantyStatus(computer.warranty_end_date),
-      daysUntilExpiry: getDaysUntilExpiry(computer.warranty_end_date),
-    }));
-  }, [computersData]);
-
-main
-  const filteredComputers = useMemo(() => {
-    return computersWithWarranty.filter((computer) => {
-      // Search filter
-      const query = searchQuery.toLowerCase().trim();
-      const matchesSearch =
-        !query ||
-main
-        (computer.name || "").toLowerCase().includes(query) ||
-        (computer.serial_number || "").toLowerCase().includes(query) ||
-        (computer.display_user || "").toLowerCase().includes(query);
-
-        computer.name.toLowerCase().includes(query) ||
-        computer.serial_number.toLowerCase().includes(query);
-main
-
-      // Department filter
-      const matchesDepartment =
-        departmentFilter === "ทั้งหมด" || computer.display_user === departmentFilter;
-
-      // Warranty filter
-      const matchesWarranty =
-        warrantyFilter === "all" || computer.warrantyStatus === warrantyFilter;
-
-      return matchesSearch && matchesDepartment && matchesWarranty;
-    });
-  }, [computersWithWarranty, searchQuery, departmentFilter, warrantyFilter]);
-
+  // ===== stats =====
   const stats = useMemo(() => {
     const total = computersWithWarranty.length;
-main
-    const nearExpiry = computersWithWarranty.filter(c => c.warrantyStatus === "warning").length;
-    const expired = computersWithWarranty.filter(c => c.warrantyStatus === "expired").length;
-    const valid = total - expired;
 
-    const active = computersWithWarranty.filter((c) => c.status === "active").length;
-    const nearExpiry = computersWithWarranty.filter(
+    const active = computersWithWarranty.filter(
+      (c) => c.status === "active" && c.warrantyStatus !== "expired"
+    ).length;
+
+    const warning = computersWithWarranty.filter(
       (c) => c.warrantyStatus === "warning"
     ).length;
+
     const expired = computersWithWarranty.filter(
       (c) => c.warrantyStatus === "expired"
     ).length;
-main
 
-    return { total, valid, nearExpiry, expired };
+    return { total, active, warning, expired };
   }, [computersWithWarranty]);
 
-  // Show login screen if not authenticated
-  if (!isAuthenticated) {
-    return <AdminLogin onLogin={login} />;
-  }
+  const departments = useMemo(() => {
+    return Array.from(
+      new Set(
+        computersWithWarranty
+          .map((c) => c.department)
+          .filter((d) => d && d !== "-")
+      )
+    );
+  }, [computersWithWarranty]);
+
+  const filteredComputers = useMemo(() => {
+    return computersWithWarranty.filter((c) => {
+      const q = searchQuery.toLowerCase().trim();
+
+      const matchSearch =
+        !q ||
+        c.name.toLowerCase().includes(q) ||
+        (c.serial_number || "").toLowerCase().includes(q);
+
+      const matchDept =
+        departmentFilter === "ทั้งหมด" ||
+        c.department === departmentFilter;
+
+      const matchWarranty =
+        warrantyFilter === "all" ||
+        c.warrantyStatus === warrantyFilter;
+
+      return matchSearch && matchDept && matchWarranty;
+    });
+  }, [computersWithWarranty, searchQuery, departmentFilter, warrantyFilter]);
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.length === 0) return;
+
+    const { error } = await supabase
+      .from("computers")
+      .delete()
+      .in("id", selectedIds);
+
+    if (!error) {
+      setSelectedIds([]);
+      fetchComputers();
+    }
+  };
+
+  const allChecked =
+    filteredComputers.length > 0 &&
+    filteredComputers.every((c) => selectedIds.includes(c.id));
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
 
       <main className="container mx-auto px-4 py-8">
+        {/* ===== Header ===== */}
         <div className="flex items-center justify-between mb-6">
-main
-          <h2 className="text-2xl font-bold text-foreground">แดชบอร์ดผู้ดูแลระบบ</h2>
-          <Button variant="outline" size="sm" onClick={handleLogout} className="gap-2">
-            <LogOut className="h-4 w-4" /> ออกจากระบบ
-          </Button>
-
-          <h2 className="text-2xl font-bold text-foreground">
-            แดชบอร์ดผู้ดูแลระบบ
-          </h2>
+          <h1 className="text-2xl font-bold">แดชบอร์ดผู้ดูแลระบบ</h1>
           <div className="flex items-center gap-2">
-            <AddComputerDialog onSuccess={handleEditSuccess} />
-            <Button variant="outline" size="sm" onClick={handleLogout} className="gap-2">
-              <LogOut className="h-4 w-4" />
+            <AddComputerDialog onSuccess={fetchComputers} />
+            <Button variant="outline" size="sm" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-2" />
               ออกจากระบบ
             </Button>
           </div>
-main
         </div>
 
-        {/* Dashboard Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        {/* ===== Stats ===== */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                ทั้งหมด
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <Monitor className="h-5 w-5 text-primary" />
-                <span className="text-2xl font-bold">{stats.total}</span>
+            <CardContent className="pt-6 flex gap-3">
+              <Monitor />
+              <div>
+                <p className="text-sm text-muted-foreground">ทั้งหมด</p>
+                <p className="text-2xl font-bold">{stats.total}</p>
               </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="pb-2">
-main
-              <CardTitle className="text-sm font-medium text-muted-foreground">อยู่ในประกัน</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <Monitor className="h-5 w-5 text-green-500" />
-
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                ใช้งาน
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <Monitor className="h-5 w-5 text-warranty-valid" />
-                <span className="text-2xl font-bold text-warranty-valid">
+            <CardContent className="pt-6 flex gap-3">
+              <CheckCircle className="text-green-600" />
+              <div>
+                <p className="text-sm text-muted-foreground">ใช้งาน</p>
+                <p className="text-2xl font-bold text-green-600">
                   {stats.active}
-                </span>
-main
+                </p>
               </div>
             </CardContent>
           </Card>
 
-main
-          <Card className="border-orange-200">
-
-          <Card className="border-warranty-warning">
-main
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                ใกล้หมดประกัน
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-main
-                <AlertTriangle className="h-5 w-5 text-orange-500" />
-                <span className="text-2xl font-bold text-orange-500">{stats.nearExpiry}</span>
-
-                <AlertTriangle className="h-5 w-5 text-warranty-warning" />
-                <span className="text-2xl font-bold text-warranty-warning">
-                  {stats.nearExpiry}
-                </span>
-main
+          <Card className="border-yellow-400">
+            <CardContent className="pt-6 flex gap-3">
+              <AlertTriangle className="text-yellow-500" />
+              <div>
+                <p className="text-sm text-muted-foreground">ใกล้หมดประกัน</p>
+                <p className="text-2xl font-bold text-yellow-500">
+                  {stats.warning}
+                </p>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-red-200">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                หมดประกัน
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-main
-                <XCircle className="h-5 w-5 text-red-500" />
-                <span className="text-2xl font-bold text-red-500">{stats.expired}</span>
-
-                <XCircle className="h-5 w-5 text-warranty-expired" />
-                <span className="text-2xl font-bold text-warranty-expired">
+          <Card className="border-red-500">
+            <CardContent className="pt-6 flex gap-3">
+              <XCircle className="text-red-600" />
+              <div>
+                <p className="text-sm text-muted-foreground">หมดประกัน</p>
+                <p className="text-2xl font-bold text-red-600">
                   {stats.expired}
-                </span>
-main
+                </p>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Filters */}
+        {/* ===== Filters ===== */}
         <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Filter className="h-5 w-5" /> ตัวกรองข้อมูล
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 mb-4 font-semibold">
+              <Filter className="h-4 w-4" />
+              ตัวกรองข้อมูล
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -346,29 +255,21 @@ main
 
               <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
                 <SelectTrigger>
-main
-                  <SelectValue placeholder="กรองตามผู้ใช้งาน" />
+                  <SelectValue placeholder="ทั้งหมด" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ทั้งหมด">ผู้ใช้งานทั้งหมด</SelectItem>
-                  {uniqueDepartments.map((dept) => (
-                    <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-
-                  <SelectValue placeholder="แผนก" />
-                </SelectTrigger>
-                <SelectContent>
-                  {departments.map((dept) => (
-                    <SelectItem key={dept} value={dept}>
-                      {dept}
+                  <SelectItem value="ทั้งหมด">ทั้งหมด</SelectItem>
+                  {departments.map((d) => (
+                    <SelectItem key={d} value={d}>
+                      {d}
                     </SelectItem>
-main
                   ))}
                 </SelectContent>
               </Select>
 
               <Select value={warrantyFilter} onValueChange={setWarrantyFilter}>
                 <SelectTrigger>
-                  <SelectValue placeholder="สถานะประกัน" />
+                  <SelectValue placeholder="ประกันทั้งหมด" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">ประกันทั้งหมด</SelectItem>
@@ -381,138 +282,113 @@ main
           </CardContent>
         </Card>
 
-        {/* Table */}
+        {/* ===== Table ===== */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span>รายการคอมพิวเตอร์</span>
-                {selectedIds.length > 0 && (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="gap-1"
-                    onClick={() => setDeleteDialogOpen(true)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    ลบ ({selectedIds.length})
-                  </Button>
-                )}
-              </div>
-              <span className="text-sm font-normal text-muted-foreground">
-                แสดง {filteredComputers.length} รายการ
-              </span>
-            </CardTitle>
-          </CardHeader>
+          <CardHeader className="px-6 py-5">
+  <div className="flex items-center justify-between">
+    {/* ซ้าย */}
+    <h2 className="text-lg font-semibold">
+      รายการคอมพิวเตอร์
+    </h2>
+
+    {/* ขวา */}
+    <div className="flex items-center gap-4">
+      <span className="text-sm text-muted-foreground">
+        แสดง {filteredComputers.length} จาก {computersWithWarranty.length} รายการ
+      </span>
+
+      {selectedIds.length > 0 && (
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={handleDeleteSelected}
+          className="gap-2"
+        >
+          <Trash2 className="h-4 w-4" />
+          ลบ ({selectedIds.length})
+        </Button>
+      )}
+    </div>
+  </div>
+</CardHeader>
+
           <CardContent className="p-0">
-            {isLoading ? (
-main
-              <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin mr-2" /> กำลังโหลด...</div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[40px]">
+                    <Checkbox
+                      checked={allChecked}
+                      onCheckedChange={(checked) =>
+                        setSelectedIds(
+                          checked ? filteredComputers.map((c) => c.id) : []
+                        )
+                      }
+                    />
+                  </TableHead>
+                  <TableHead>#</TableHead>
+                  <TableHead>ชื่อคอม</TableHead>
+                  <TableHead>ซีเรียล</TableHead>
+                  <TableHead>แผนก</TableHead>
+                  <TableHead>วันหมดประกัน</TableHead>
+                  <TableHead>สถานะประกัน</TableHead>
+                  <TableHead>สถานะเครื่อง</TableHead>
+                  <TableHead className="text-center">จัดการ</TableHead>
+                </TableRow>
+              </TableHeader>
 
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <span className="ml-2 text-muted-foreground">กำลังโหลดข้อมูล...</span>
-              </div>
-            ) : error ? (
-              <div className="flex items-center justify-center py-12 text-destructive">
-                <XCircle className="h-5 w-5 mr-2" />
-                เกิดข้อผิดพลาดในการโหลดข้อมูล
-              </div>
-main
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-12">
-                        <Checkbox
-                          checked={
-                            filteredComputers.length > 0 &&
-                            selectedIds.length === filteredComputers.length
-                          }
-                          onCheckedChange={handleSelectAll}
-                        />
-                      </TableHead>
-                      <TableHead className="w-12">#</TableHead>
-                      <TableHead>ชื่อคอม</TableHead>
-main
-                      <TableHead>ซีเรียลนัมเบอร์</TableHead>
-                      <TableHead>ผู้ใช้งาน / หมายเหตุ</TableHead>
-
-                      <TableHead className="hidden md:table-cell">ซีเรียลนัมเบอร์</TableHead>
-                      <TableHead className="hidden sm:table-cell">แผนก</TableHead>
-                      <TableHead className="hidden lg:table-cell">วันหมดประกัน</TableHead>
-main
-                      <TableHead>สถานะประกัน</TableHead>
-                      <TableHead className="w-20">จัดการ</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredComputers.map((computer, index) => (
-                      <TableRow key={computer.id}>
-main
-                        <TableCell>{index + 1}</TableCell>
-                        <TableCell className="font-medium">{computer.name}</TableCell>
-                        <TableCell className="font-mono text-sm">{computer.serial_number}</TableCell>
-                        <TableCell className="text-sm">{computer.display_user}</TableCell>
-
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedIds.includes(computer.id)}
-                            onCheckedChange={(checked) =>
-                              handleSelectOne(computer.id, !!checked)
-                            }
-                          />
-                        </TableCell>
-                        <TableCell className="font-medium">{index + 1}</TableCell>
-                        <TableCell className="font-medium">{computer.name}</TableCell>
-                        <TableCell className="hidden md:table-cell font-mono text-sm">
-                          {computer.serial_number}
-                        </TableCell>
-                        <TableCell className="hidden sm:table-cell">
-                          {computer.department}
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell">
-                          {format(parseISO(computer.warranty_end_date), "d MMM yyyy", {
-                            locale: th,
-                          })}
-                        </TableCell>
-main
-                        <TableCell>
-                          <WarrantyBadge
-                            status={computer.warrantyStatus as any}
-                            daysUntilExpiry={computer.daysUntilExpiry}
-                            showDays={false}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(computer)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
+              <TableBody>
+                {filteredComputers.map((c, i) => (
+                  <TableRow key={c.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedIds.includes(c.id)}
+                        onCheckedChange={(checked) =>
+                          setSelectedIds((prev) =>
+                            checked
+                              ? [...prev, c.id]
+                              : prev.filter((id) => id !== c.id)
+                          )
+                        }
+                      />
+                    </TableCell>
+                    <TableCell>{i + 1}</TableCell>
+                    <TableCell className="font-medium">{c.name}</TableCell>
+                    <TableCell>{c.serial_number}</TableCell>
+                    <TableCell>{c.department}</TableCell>
+                    <TableCell>{c.warranty_expiry}</TableCell>
+                    <TableCell>
+                      <WarrantyBadge
+                        status={c.warrantyStatus}
+                        daysUntilExpiry={c.daysUntilExpiry}
+                      />
+                    </TableCell>
+                    <TableCell>{c.status}</TableCell>
+                    <TableCell className="text-center">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setSelectedComputer(c);
+                          setEditOpen(true);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       </main>
 
       <EditComputerDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
         computer={selectedComputer}
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
-        onSuccess={handleEditSuccess}
-      />
-
-      {/* Delete Dialog */}
-      <DeleteComputerDialog
-        open={deleteDialogOpen}
-        onOpenChange={setDeleteDialogOpen}
-        computerIds={selectedIds}
-        onSuccess={handleDeleteSuccess}
+        onSuccess={fetchComputers}
       />
     </div>
   );

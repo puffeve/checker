@@ -1,125 +1,106 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { format } from "date-fns";
-import { CalendarIcon, Plus } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Calendar } from "@/components/ui/calendar";
+import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Form,
-  FormControl,
   FormField,
   FormItem,
   FormLabel,
+  FormControl,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { departments } from "@/data/mockComputers";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { CalendarIcon, Loader2 } from "lucide-react";
+import { format } from "date-fns";
+import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const formSchema = z.object({
-  name: z.string().min(1, "กรุณากรอกชื่อคอมพิวเตอร์"),
-  serial_number: z.string().min(1, "กรุณากรอกซีเรียลนัมเบอร์"),
-  department: z.string().min(1, "กรุณาเลือกแผนก"),
-  status: z.string().min(1, "กรุณาเลือกสถานะ"),
-  registration_date: z.date(),
-  warranty_end_date: z.date(),
+  device_name: z.string().min(1),
+  serial_number: z.string().min(1),
+  department: z.string().min(1),
+  status: z.string(),
+  contract_start: z.date(),
+  warranty_expiry: z.date(),
 });
 
-type FormData = z.infer<typeof formSchema>;
+type FormValues = z.infer<typeof formSchema>;
 
-interface AddComputerDialogProps {
+interface Props {
   onSuccess: () => void;
 }
 
-export function AddComputerDialog({ onSuccess }: AddComputerDialogProps) {
+export function AddComputerDialog({ onSuccess }: Props) {
   const [open, setOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const form = useForm<FormData>({
+  const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: "",
-      serial_number: "",
-      department: "",
       status: "active",
-      registration_date: new Date(),
-      warranty_end_date: new Date(),
     },
   });
 
-  const onSubmit = async (data: FormData) => {
-    setIsSubmitting(true);
+  const onSubmit = async (values: FormValues) => {
+    setLoading(true);
     try {
-      const { error } = await supabase.from("computers").insert({
-        name: data.name,
-        serial_number: data.serial_number,
-        department: data.department,
-        status: data.status,
-        registration_date: format(data.registration_date, "yyyy-MM-dd"),
-        warranty_end_date: format(data.warranty_end_date, "yyyy-MM-dd"),
-      });
+      const payload = {
+        device_name: values.device_name,
+        serial_number: values.serial_number,
+        user_name: values.department,
+        status: values.status,
+        contract_start: format(values.contract_start, "yyyy-MM-dd"),
+        warranty_expiry: format(values.warranty_expiry, "yyyy-MM-dd"),
+      };
+
+      const { error } = await supabase.from("computers").insert(payload);
 
       if (error) throw error;
 
       toast.success("เพิ่มคอมพิวเตอร์สำเร็จ");
-      form.reset();
       setOpen(false);
+      form.reset();
       onSuccess();
-    } catch (error) {
-      console.error("Error adding computer:", error);
+    } catch (err: any) {
+      console.error(err);
       toast.error("เกิดข้อผิดพลาดในการเพิ่มข้อมูล");
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
-  const filteredDepartments = departments.filter((d) => d !== "ทั้งหมด");
-
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button className="gap-2">
-          <Plus className="h-4 w-4" />
-          เพิ่มคอมพิวเตอร์
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-md">
+      <Button onClick={() => setOpen(true)}>+ เพิ่มคอมพิวเตอร์</Button>
+
+      <DialogContent className="sm:max-w-[420px]">
         <DialogHeader>
           <DialogTitle>เพิ่มคอมพิวเตอร์ใหม่</DialogTitle>
         </DialogHeader>
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
-              name="name"
+              name="device_name"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>ชื่อคอมพิวเตอร์</FormLabel>
                   <FormControl>
-                    <Input placeholder="PC-001" {...field} />
+                    <Input {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -133,9 +114,8 @@ export function AddComputerDialog({ onSuccess }: AddComputerDialogProps) {
                 <FormItem>
                   <FormLabel>ซีเรียลนัมเบอร์</FormLabel>
                   <FormControl>
-                    <Input placeholder="SN-XXXXXXXX" {...field} />
+                    <Input {...field} />
                   </FormControl>
-                  <FormMessage />
                 </FormItem>
               )}
             />
@@ -146,21 +126,9 @@ export function AddComputerDialog({ onSuccess }: AddComputerDialogProps) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>แผนก</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="เลือกแผนก" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {filteredDepartments.map((dept) => (
-                        <SelectItem key={dept} value={dept}>
-                          {dept}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
                 </FormItem>
               )}
             />
@@ -172,113 +140,61 @@ export function AddComputerDialog({ onSuccess }: AddComputerDialogProps) {
                 <FormItem>
                   <FormLabel>สถานะเครื่อง</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="เลือกสถานะ" />
-                      </SelectTrigger>
-                    </FormControl>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="active">ใช้งาน</SelectItem>
                       <SelectItem value="repair">ซ่อม</SelectItem>
                       <SelectItem value="retired">ปลดระวาง</SelectItem>
                     </SelectContent>
                   </Select>
-                  <FormMessage />
                 </FormItem>
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="registration_date"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>วันที่ลงทะเบียน</FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <FormControl>
+            {["contract_start", "warranty_expiry"].map((key) => (
+              <FormField
+                key={key}
+                control={form.control}
+                name={key as "contract_start" | "warranty_expiry"}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      {key === "contract_start" ? "วันที่ลงทะเบียน" : "วันหมดประกัน"}
+                    </FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className={cn(
-                            "w-full pl-3 text-left font-normal",
-                            !field.value && "text-muted-foreground"
-                          )}
+                          className={cn("w-full justify-start text-left font-normal")}
                         >
-                          {field.value ? (
-                            format(field.value, "dd/MM/yyyy")
-                          ) : (
-                            <span>เลือกวันที่</span>
-                          )}
+                          {field.value ? format(field.value, "dd/MM/yyyy") : "เลือกวันที่"}
                           <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                         </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={field.value}
-                        onSelect={field.onChange}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                      </PopoverTrigger>
+                      <PopoverContent align="start" className="p-0">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </FormItem>
+                )}
+              />
+            ))}
 
-            <FormField
-              control={form.control}
-              name="warranty_end_date"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>วันหมดประกัน</FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full pl-3 text-left font-normal",
-                            !field.value && "text-muted-foreground"
-                          )}
-                        >
-                          {field.value ? (
-                            format(field.value, "dd/MM/yyyy")
-                          ) : (
-                            <span>เลือกวันที่</span>
-                          )}
-                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={field.value}
-                        onSelect={field.onChange}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="flex gap-2 pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setOpen(false)}
-                className="flex-1"
-              >
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 ยกเลิก
               </Button>
-              <Button type="submit" disabled={isSubmitting} className="flex-1">
-                {isSubmitting ? "กำลังบันทึก..." : "เพิ่มคอมพิวเตอร์"}
+              <Button type="submit" disabled={loading}>
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                เพิ่มคอมพิวเตอร์
               </Button>
-            </div>
+            </DialogFooter>
           </form>
         </Form>
       </DialogContent>
