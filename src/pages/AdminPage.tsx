@@ -30,7 +30,6 @@ import {
   AlertTriangle,
   XCircle,
   LogOut,
-  Loader2,
   Filter,
   Search,
   Pencil,
@@ -105,7 +104,7 @@ export default function AdminPage() {
     const total = computersWithWarranty.length;
 
     const active = computersWithWarranty.filter(
-      (c) => c.status === "active" && c.warrantyStatus !== "expired"
+      (c) => c.warrantyStatus !== "expired"
     ).length;
 
     const warning = computersWithWarranty.filter(
@@ -201,7 +200,7 @@ export default function AdminPage() {
             <CardContent className="pt-6 flex gap-3">
               <CheckCircle className="text-green-600" />
               <div>
-                <p className="text-sm text-muted-foreground">ใช้งาน</p>
+                <p className="text-sm text-muted-foreground">อยู่ในประกัน</p>
                 <p className="text-2xl font-bold text-green-600">
                   {stats.active}
                 </p>
@@ -234,83 +233,32 @@ export default function AdminPage() {
           </Card>
         </div>
 
-        {/* ===== Filters ===== */}
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 mb-4 font-semibold">
-              <Filter className="h-4 w-4" />
-              ตัวกรองข้อมูล
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="ค้นหาชื่อคอม / ซีเรียล..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-
-              <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="ทั้งหมด" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ทั้งหมด">ทั้งหมด</SelectItem>
-                  {departments.map((d) => (
-                    <SelectItem key={d} value={d}>
-                      {d}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={warrantyFilter} onValueChange={setWarrantyFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="ประกันทั้งหมด" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">ประกันทั้งหมด</SelectItem>
-                  <SelectItem value="valid">อยู่ในประกัน</SelectItem>
-                  <SelectItem value="warning">ใกล้หมดประกัน</SelectItem>
-                  <SelectItem value="expired">หมดประกัน</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* ===== Table ===== */}
         <Card>
           <CardHeader className="px-6 py-5">
-  <div className="flex items-center justify-between">
-    {/* ซ้าย */}
-    <h2 className="text-lg font-semibold">
-      รายการคอมพิวเตอร์
-    </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">รายการคอมพิวเตอร์</h2>
 
-    {/* ขวา */}
-    <div className="flex items-center gap-4">
-      <span className="text-sm text-muted-foreground">
-        แสดง {filteredComputers.length} จาก {computersWithWarranty.length} รายการ
-      </span>
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-muted-foreground">
+                  แสดง {filteredComputers.length} จาก{" "}
+                  {computersWithWarranty.length} รายการ
+                </span>
 
-      {selectedIds.length > 0 && (
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={handleDeleteSelected}
-          className="gap-2"
-        >
-          <Trash2 className="h-4 w-4" />
-          ลบ ({selectedIds.length})
-        </Button>
-      )}
-    </div>
-  </div>
-</CardHeader>
+                {selectedIds.length > 0 && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleDeleteSelected}
+                    className="gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    ลบ ({selectedIds.length})
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardHeader>
 
           <CardContent className="p-0">
             <Table>
@@ -326,13 +274,12 @@ export default function AdminPage() {
                       }
                     />
                   </TableHead>
-                  <TableHead>#</TableHead>
+                  <TableHead>ลำดับ</TableHead>
                   <TableHead>ชื่อคอม</TableHead>
                   <TableHead>ซีเรียล</TableHead>
                   <TableHead>แผนก</TableHead>
                   <TableHead>วันหมดประกัน</TableHead>
                   <TableHead>สถานะประกัน</TableHead>
-                  <TableHead>สถานะเครื่อง</TableHead>
                   <TableHead className="text-center">จัดการ</TableHead>
                 </TableRow>
               </TableHeader>
@@ -363,7 +310,6 @@ export default function AdminPage() {
                         daysUntilExpiry={c.daysUntilExpiry}
                       />
                     </TableCell>
-                    <TableCell>{c.status}</TableCell>
                     <TableCell className="text-center">
                       <Button
                         variant="ghost"
